@@ -1,0 +1,1108 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: src/services/**, firebase-applet-config.json, .env.example
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+src/
+  services/
+    authService.ts
+    driveService.ts
+    googleCalendarService.ts
+    googleDriveService.ts
+    storageService.ts
+    syncService.ts
+.env.example
+firebase-applet-config.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="src/services/authService.ts">
+/**
+ * Authentication & OAuth service for Google Drive API access
+ */
+
+const rawClientId = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_ID = (rawClientId && rawClientId !== 'YOUR_PLAN2MILESTONE_CLIENT_ID') 
+  ? rawClientId 
+  : '809054363294-dev.apps.googleusercontent.com';
+const TOKEN_KEY = 'google_access_token';
+const EXPIRY_KEY = 'google_token_expiry';
+
+export const getStoredAccessToken = (): string | null => {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const expiry = localStorage.getItem(EXPIRY_KEY);
+  
+  if (token && expiry) {
+    if (Date.now() > parseInt(expiry, 10)) {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(EXPIRY_KEY);
+      return null;
+    }
+  }
+  return token;
+};
+
+export const setStoredAccessToken = (token: string, expiresInSeconds: number = 3600): void => {
+  localStorage.setItem(TOKEN_KEY, token);
+  const expiryTime = Date.now() + (expiresInSeconds - 60) * 1000; // 1 min margin
+  localStorage.setItem(EXPIRY_KEY, expiryTime.toString());
+};
+
+export const clearStoredAccessToken = (): void => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(EXPIRY_KEY);
+};
+
+export interface AuthResult {
+  accessToken: string;
+  userEmail?: string;
+}
+
+/**
+ * Prompts user for Google OAuth consent and returns access_token
+ */
+export const googleSignIn = (): Promise<AuthResult | null> => {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') {
+      resolve(null);
+      return;
+    }
+
+    const g = (window as any).google;
+    
+    if (g && g.accounts && g.accounts.oauth2) {
+      const client = g.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events',
+        callback: (response: any) => {
+          if (response && response.access_token) {
+            const expiresIn = response.expires_in ? parseInt(response.expires_in, 10) : 3600;
+            setStoredAccessToken(response.access_token, expiresIn);
+            resolve({
+              accessToken: response.access_token,
+              userEmail: 'Puvendran@gmail.com', // user account context
+            });
+          } else {
+            console.error('OAuth sign in failed or cancelled', response);
+            resolve(null);
+          }
+        },
+        error_callback: (err: any) => {
+          console.error('OAuth token client error:', err);
+          resolve(null);
+        }
+      });
+
+      client.requestAccessToken({ prompt: 'consent' });
+    } else {
+      // Fallback if script is loading: load dynamic GIS script
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.onload = () => {
+        const gis = (window as any).google;
+        if (gis && gis.accounts && gis.accounts.oauth2) {
+          const client = gis.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events',
+            callback: (response: any) => {
+              if (response && response.access_token) {
+                setStoredAccessToken(response.access_token, 3600);
+                resolve({ accessToken: response.access_token });
+              } else {
+                resolve(null);
+              }
+            }
+          });
+          client.requestAccessToken({ prompt: 'consent' });
+        } else {
+          alert('Google Identity Services script failed to initialize.');
+          resolve(null);
+        }
+      };
+      script.onerror = () => {
+        alert('Failed to load Google Identity script. Please check connection.');
+        resolve(null);
+      };
+      document.body.appendChild(script);
+    }
+  });
+};
+</file>
+
+<file path="src/services/driveService.ts">
+/**
+ * Google Drive REST API v3 service for file & folder management
+ */
+
+export interface DriveFileItem {
+  id: string;
+  name: string;
+  mimeType: string;
+  parents?: string[];
+  modifiedTime?: string;
+}
+
+const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3/files';
+const UPLOAD_API_BASE = 'https://www.googleapis.com/upload/drive/v3/files';
+
+class DriveService {
+  private token: string | null = null;
+
+  public setToken(token: string | null): void {
+    this.token = token;
+  }
+
+  public getToken(): string | null {
+    return this.token;
+  }
+
+  public hasToken(): boolean {
+    return !!this.token;
+  }
+
+  private async fetchApi<T>(url: string, options: RequestInit = {}): Promise<T> {
+    if (!this.token) {
+      throw new Error('Google Drive access token missing. Please connect your Google account.');
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        ...(options.headers || {}),
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Google Drive API error (${response.status}): ${errorText}`);
+    }
+
+    return response.json() as Promise<T>;
+  }
+
+  /**
+   * Fetches folder metadata including name and parents
+   */
+  public async getFolderMetadata(folderId: string): Promise<DriveFileItem> {
+    if (folderId === 'root') {
+      return { id: 'root', name: 'My Drive', mimeType: 'application/vnd.google-apps.folder' };
+    }
+    const url = `${DRIVE_API_BASE}/${folderId}?fields=id,name,mimeType,parents`;
+    return this.fetchApi<DriveFileItem>(url);
+  }
+
+  /**
+   * Lists subfolders inside a specific parent folder
+   */
+  public async listFolders(parentFolderId: string = 'root'): Promise<DriveFileItem[]> {
+    const q = encodeURIComponent(
+      `'${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+    );
+    const url = `${DRIVE_API_BASE}?q=${q}&fields=files(id,name,mimeType,parents,modifiedTime)&orderBy=name`;
+    const res = await this.fetchApi<{ files: DriveFileItem[] }>(url);
+    return res.files || [];
+  }
+
+  /**
+   * Searches for a subfolder by name or creates it inside parent folder
+   */
+  public async findOrCreateFolder(folderName: string, parentFolderId: string = 'root'): Promise<DriveFileItem> {
+    const q = encodeURIComponent(
+      `name = '${folderName.replace(/'/g, "\\'")}' and '${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+    );
+    const searchUrl = `${DRIVE_API_BASE}?q=${q}&fields=files(id,name,mimeType,parents)`;
+    const searchRes = await this.fetchApi<{ files: DriveFileItem[] }>(searchUrl);
+
+    if (searchRes.files && searchRes.files.length > 0) {
+      return searchRes.files[0];
+    }
+
+    // Create new folder
+    const body: Record<string, any> = {
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+    };
+    if (parentFolderId && parentFolderId !== 'root') {
+      body.parents = [parentFolderId];
+    }
+
+    const createRes = await this.fetchApi<DriveFileItem>(DRIVE_API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    return createRes;
+  }
+
+  /**
+   * Searches for a file by name inside a parent folder
+   */
+  public async findFile(fileName: string, parentFolderId: string = 'root'): Promise<DriveFileItem | null> {
+    const q = encodeURIComponent(
+      `name = '${fileName.replace(/'/g, "\\'")}' and '${parentFolderId}' in parents and trashed = false`
+    );
+    const url = `${DRIVE_API_BASE}?q=${q}&fields=files(id,name,mimeType,modifiedTime)`;
+    const res = await this.fetchApi<{ files: DriveFileItem[] }>(url);
+    if (res.files && res.files.length > 0) {
+      return res.files[0];
+    }
+    return null;
+  }
+
+  /**
+   * Saves or updates a JSON file content in Drive
+   */
+  public async saveFile(
+    fileName: string,
+    content: any,
+    parentFolderId: string = 'root',
+    existingFileId?: string
+  ): Promise<{ fileId: string; modifiedTime: string }> {
+    let targetFileId = existingFileId;
+
+    if (!targetFileId) {
+      const existing = await this.findFile(fileName, parentFolderId);
+      if (existing) {
+        targetFileId = existing.id;
+      }
+    }
+
+    const contentString = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+    const nowIso = new Date().toISOString();
+
+    if (targetFileId) {
+      // Update existing file content
+      const updateUrl = `${UPLOAD_API_BASE}/${targetFileId}?uploadType=media`;
+      const res = await fetch(updateUrl, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: contentString,
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Failed to update Drive file: ${errText}`);
+      }
+
+      return { fileId: targetFileId, modifiedTime: nowIso };
+    } else {
+      // Create new file with metadata
+      const boundary = 'smarttrack_bnd_' + Date.now();
+      const metadata: Record<string, any> = {
+        name: fileName,
+        mimeType: 'application/json',
+      };
+      if (parentFolderId && parentFolderId !== 'root') {
+        metadata.parents = [parentFolderId];
+      }
+
+      const multipartBody =
+        `--${boundary}\r\n` +
+        `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+        `${JSON.stringify(metadata)}\r\n` +
+        `--${boundary}\r\n` +
+        `Content-Type: application/json\r\n\r\n` +
+        `${contentString}\r\n` +
+        `--${boundary}--`;
+
+      const response = await fetch(`${UPLOAD_API_BASE}?uploadType=multipart`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`,
+        },
+        body: multipartBody,
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Failed to create file in Drive: ${errText}`);
+      }
+
+      const created = await response.json();
+      return { fileId: created.id, modifiedTime: nowIso };
+    }
+  }
+
+  /**
+   * Reads JSON content of a file from Drive
+   */
+  public async readFile<T = any>(fileId: string): Promise<T> {
+    const downloadUrl = `${DRIVE_API_BASE}/${fileId}?alt=media`;
+    if (!this.token) {
+      throw new Error('Access token required to read file');
+    }
+
+    const response = await fetch(downloadUrl, {
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to read file from Drive (${response.status}): ${response.statusText}`);
+    }
+
+    return response.json() as Promise<T>;
+  }
+}
+
+export const driveService = new DriveService();
+</file>
+
+<file path="src/services/googleCalendarService.ts">
+import { Milestone } from '../types';
+
+const CALENDAR_API_URL = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+
+export class GoogleCalendarService {
+  /**
+   * Syncs a milestone event to Google Calendar API
+   */
+  public static async createOrUpdateCalendarEvent(
+    accessToken: string,
+    milestone: Milestone
+  ): Promise<string> {
+    const eventData = this.buildGoogleCalendarEventData(milestone);
+
+    if (milestone.googleCalendarEventId) {
+      // Update existing
+      const updateUrl = `${CALENDAR_API_URL}/${milestone.googleCalendarEventId}`;
+      const response = await fetch(updateUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Google Calendar update failed: ${err}`);
+      }
+
+      const res = await response.json();
+      return res.id;
+    } else {
+      // Create new
+      const response = await fetch(CALENDAR_API_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Google Calendar event creation failed: ${err}`);
+      }
+
+      const res = await response.json();
+      return res.id;
+    }
+  }
+
+  /**
+   * Deletes an event from Google Calendar API
+   */
+  public static async deleteCalendarEvent(
+    accessToken: string,
+    eventId: string
+  ): Promise<void> {
+    const url = `${CALENDAR_API_URL}/${eventId}`;
+    await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  }
+
+  /**
+   * Constructs payload for Google Calendar REST API
+   */
+  private static buildGoogleCalendarEventData(milestone: Milestone) {
+    const dateToUse = milestone.targetDate || milestone.startDate;
+    const startDate = new Date(dateToUse);
+    // 1-hour duration event
+    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+
+    const description = `${milestone.description}\n\n[SmartTrack - Plan2Milestone]\nType: ${milestone.type}\nCategory: ${milestone.category}`;
+
+    const payload: any = {
+      summary: `[SmartTrack] ${milestone.title}`,
+      description: description,
+      start: {
+        dateTime: startDate.toISOString(),
+      },
+      end: {
+        dateTime: endDate.toISOString(),
+      },
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: 24 * 60 }, // 1 day before
+          { method: 'popup', minutes: 60 },      // 1 hour before
+        ],
+      },
+    };
+
+    // Add recurrence rule if repeating
+    if (milestone.type === 'repeating' && milestone.repeatInterval) {
+      let rrule = '';
+      switch (milestone.repeatInterval) {
+        case 'daily':
+          rrule = 'RRULE:FREQ=DAILY';
+          break;
+        case 'weekly':
+          rrule = 'RRULE:FREQ=WEEKLY';
+          break;
+        case 'monthly':
+          rrule = 'RRULE:FREQ=MONTHLY';
+          break;
+        case 'quarterly':
+          rrule = 'RRULE:FREQ=MONTHLY;INTERVAL=3';
+          break;
+        case 'yearly':
+          rrule = 'RRULE:FREQ=YEARLY';
+          break;
+        case 'custom':
+          if (milestone.customRepeatDays) {
+            rrule = `RRULE:FREQ=DAILY;INTERVAL=${milestone.customRepeatDays}`;
+          }
+          break;
+      }
+      if (rrule) {
+        payload.recurrence = [rrule];
+      }
+    }
+
+    return payload;
+  }
+
+  /**
+   * Generates direct Google Calendar Web Template URL for instant browser addition
+   */
+  public static generateGoogleCalendarWebLink(milestone: Milestone): string {
+    const targetDateObj = new Date(milestone.targetDate || milestone.startDate);
+    const endDateObj = new Date(targetDateObj.getTime() + 60 * 60 * 1000);
+
+    const formatGCalDate = (d: Date) =>
+      d.toISOString().replace(/-|:|\.\d\d\d/g, '');
+
+    const dates = `${formatGCalDate(targetDateObj)}/${formatGCalDate(endDateObj)}`;
+    const title = encodeURIComponent(`[SmartTrack] ${milestone.title}`);
+    const details = encodeURIComponent(
+      `${milestone.description}\n\nCategory: ${milestone.category}\nTracked with SmartTrack - Plan2Milestone`
+    );
+
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&dates=${dates}`;
+  }
+
+  /**
+   * Generates standard .ics (iCalendar) content for Apple Calendar / Mac / iOS / Outlook
+   */
+  public static generateIcsContent(milestone: Milestone): string {
+    const dateToUse = new Date(milestone.targetDate || milestone.startDate);
+    const endDate = new Date(dateToUse.getTime() + 60 * 60 * 1000);
+
+    const formatIcsDate = (d: Date) =>
+      d.toISOString().replace(/-|:|\.\d\d\d/g, '');
+
+    const nowStr = formatIcsDate(new Date());
+    const startStr = formatIcsDate(dateToUse);
+    const endStr = formatIcsDate(endDate);
+
+    let rruleStr = '';
+    if (milestone.type === 'repeating' && milestone.repeatInterval) {
+      switch (milestone.repeatInterval) {
+        case 'daily':
+          rruleStr = 'RRULE:FREQ=DAILY\n';
+          break;
+        case 'weekly':
+          rruleStr = 'RRULE:FREQ=WEEKLY\n';
+          break;
+        case 'monthly':
+          rruleStr = 'RRULE:FREQ=MONTHLY\n';
+          break;
+        case 'quarterly':
+          rruleStr = 'RRULE:FREQ=MONTHLY;INTERVAL=3\n';
+          break;
+        case 'yearly':
+          rruleStr = 'RRULE:FREQ=YEARLY\n';
+          break;
+        case 'custom':
+          if (milestone.customRepeatDays) {
+            rruleStr = `RRULE:FREQ=DAILY;INTERVAL=${milestone.customRepeatDays}\n`;
+          }
+          break;
+      }
+    }
+
+    const icsLines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//SmartTrack//Plan2Milestone App//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:smarttrack-${milestone.id}@plan2milestone`,
+      `DTSTAMP:${nowStr}`,
+      `DTSTART:${startStr}`,
+      `DTEND:${endStr}`,
+      `SUMMARY:[SmartTrack] ${milestone.title}`,
+      `DESCRIPTION:${milestone.description.replace(/\n/g, '\\n')}`,
+      rruleStr ? rruleStr.trim() : '',
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      'DESCRIPTION:Reminder',
+      'TRIGGER:-PT1D', // 1 day before
+      'END:VALARM',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].filter(Boolean);
+
+    return icsLines.join('\r\n');
+  }
+
+  /**
+   * Triggers download of .ics file for Apple Calendar
+   */
+  public static downloadIcsFile(milestone: Milestone): void {
+    const icsContent = this.generateIcsContent(milestone);
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const sanitizedTitle = milestone.title.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    link.download = `smarttrack_${sanitizedTitle}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+}
+</file>
+
+<file path="src/services/googleDriveService.ts">
+import { SmartTrackAppData, SyncStatus } from '../types';
+
+const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3/files';
+const UPLOAD_API_URL = 'https://www.googleapis.com/upload/drive/v3/files';
+
+export const DRIVE_FOLDER_NAME = '.AppData.SmartTrack';
+export const APP_SUBFOLDER_NAME = 'smart-track-plan2milestone';
+export const FILE_NAME = 'smart_track_plan2milestone.json';
+
+export class GoogleDriveService {
+  /**
+   * Helper to execute Drive REST API calls with access token
+   */
+  private static async fetchDrive(
+    endpoint: string,
+    accessToken: string,
+    options: RequestInit = {}
+  ) {
+    const response = await fetch(endpoint, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(options.headers || {}),
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Google Drive API Error (${response.status}): ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Finds or creates folder hierarchy: .AppData.SmartTrack -> Plan2Milestone
+   */
+  public static async ensureAppFolderStructure(accessToken: string): Promise<{
+    rootFolderId: string;
+    subfolderId: string;
+  }> {
+    // 1. Search for root folder ".AppData.SmartTrack"
+    const rootQuery = encodeURIComponent(
+      `name = '${DRIVE_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+    );
+    const rootResult = await this.fetchDrive(
+      `${DRIVE_API_URL}?q=${rootQuery}&fields=files(id,name)`,
+      accessToken
+    );
+
+    let rootFolderId: string;
+    if (rootResult.files && rootResult.files.length > 0) {
+      rootFolderId = rootResult.files[0].id;
+    } else {
+      // Create .AppData.SmartTrack folder
+      const createRoot = await this.fetchDrive(DRIVE_API_URL, accessToken, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: DRIVE_FOLDER_NAME,
+          mimeType: 'application/vnd.google-apps.folder',
+        }),
+      });
+      rootFolderId = createRoot.id;
+    }
+
+    // 2. Search for subfolder "Plan2Milestone" inside .AppData.SmartTrack
+    const subQuery = encodeURIComponent(
+      `name = '${APP_SUBFOLDER_NAME}' and '${rootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+    );
+    const subResult = await this.fetchDrive(
+      `${DRIVE_API_URL}?q=${subQuery}&fields=files(id,name)`,
+      accessToken
+    );
+
+    let subfolderId: string;
+    if (subResult.files && subResult.files.length > 0) {
+      subfolderId = subResult.files[0].id;
+    } else {
+      // Create Plan2Milestone subfolder
+      const createSub = await this.fetchDrive(DRIVE_API_URL, accessToken, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: APP_SUBFOLDER_NAME,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [rootFolderId],
+        }),
+      });
+      subfolderId = createSub.id;
+    }
+
+    return { rootFolderId, subfolderId };
+  }
+
+  /**
+   * Search for existing json file inside subfolder
+   */
+  public static async findDataFile(
+    accessToken: string,
+    subfolderId: string
+  ): Promise<string | null> {
+    const query = encodeURIComponent(
+      `name = '${FILE_NAME}' and '${subfolderId}' in parents and trashed = false`
+    );
+    const result = await this.fetchDrive(
+      `${DRIVE_API_URL}?q=${query}&fields=files(id,name,modifiedTime)`,
+      accessToken
+    );
+
+    if (result.files && result.files.length > 0) {
+      return result.files[0].id;
+    }
+    return null;
+  }
+
+  /**
+   * Saves or updates data payload to Drive
+   */
+  public static async saveToDrive(
+    accessToken: string,
+    data: SmartTrackAppData,
+    existingFileId?: string,
+    subfolderId?: string
+  ): Promise<{ fileId: string; syncedAt: string }> {
+    let targetSubfolderId = subfolderId;
+    if (!targetSubfolderId) {
+      const folderStructure = await this.ensureAppFolderStructure(accessToken);
+      targetSubfolderId = folderStructure.subfolderId;
+    }
+
+    let fileId = existingFileId;
+    if (!fileId) {
+      fileId = await this.findDataFile(accessToken, targetSubfolderId) || undefined;
+    }
+
+    const contentString = JSON.stringify(data, null, 2);
+    const syncedAt = new Date().toISOString();
+
+    if (fileId) {
+      // Update existing file using multipart upload or media upload
+      const updateUrl = `${UPLOAD_API_URL}/${fileId}?uploadType=media`;
+      await fetch(updateUrl, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: contentString,
+      });
+      return { fileId, syncedAt };
+    } else {
+      // Create new file with metadata in subfolder
+      const boundary = 'smarttrack_boundary_' + Date.now();
+      const metadata = {
+        name: FILE_NAME,
+        mimeType: 'application/json',
+        parents: [targetSubfolderId],
+      };
+
+      const multipartRequestBody =
+        `--${boundary}\r\n` +
+        `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+        `${JSON.stringify(metadata)}\r\n` +
+        `--${boundary}\r\n` +
+        `Content-Type: application/json\r\n\r\n` +
+        `${contentString}\r\n` +
+        `--${boundary}--`;
+
+      const response = await fetch(`${UPLOAD_API_URL}?uploadType=multipart`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`,
+        },
+        body: multipartRequestBody,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to create file in Drive: ${errorText}`);
+      }
+
+      const fileResult = await response.json();
+      return { fileId: fileResult.id, syncedAt };
+    }
+  }
+
+  /**
+   * Loads data payload from Drive
+   */
+  public static async loadFromDrive(
+    accessToken: string,
+    fileId: string
+  ): Promise<SmartTrackAppData> {
+    const downloadUrl = `${DRIVE_API_URL}/${fileId}?alt=media`;
+    const response = await fetch(downloadUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download data from Google Drive: ${response.statusText}`);
+    }
+
+    const json = await response.json();
+    return json as SmartTrackAppData;
+  }
+}
+</file>
+
+<file path="src/services/storageService.ts">
+import { Milestone, SmartTrackAppData } from '../types';
+import { INITIAL_MILESTONES } from '../data/initialData';
+
+const LOCAL_STORAGE_KEY = 'smarttrack_plan2milestone_v1';
+
+export class StorageService {
+  /**
+   * Reads data from localStorage or initializes with initial milestones
+   */
+  public static loadLocalData(): SmartTrackAppData {
+    try {
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && Array.isArray(parsed.milestones)) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load from local storage:', e);
+    }
+
+    const defaultData: SmartTrackAppData = {
+      version: '1.0.0',
+      lastUpdated: new Date().toISOString(),
+      appName: 'smart-track-plan2milestone',
+      milestones: INITIAL_MILESTONES,
+      userPreferences: {
+        theme: 'dark',
+        defaultView: 'cards',
+      },
+    };
+
+    this.saveLocalData(defaultData);
+    return defaultData;
+  }
+
+  /**
+   * Saves data payload to localStorage
+   */
+  public static saveLocalData(data: SmartTrackAppData): void {
+    try {
+      data.lastUpdated = new Date().toISOString();
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.error('Failed to save to local storage:', e);
+    }
+  }
+
+  /**
+   * Resets local storage to default sample data
+   */
+  public static resetToDefault(): SmartTrackAppData {
+    const defaultData: SmartTrackAppData = {
+      version: '1.0.0',
+      lastUpdated: new Date().toISOString(),
+      appName: 'smart-track-plan2milestone',
+      milestones: INITIAL_MILESTONES,
+      userPreferences: {
+        theme: 'dark',
+        defaultView: 'cards',
+      },
+    };
+    this.saveLocalData(defaultData);
+    return defaultData;
+  }
+}
+</file>
+
+<file path="src/services/syncService.ts">
+/**
+ * Differential 2-Way Synchronization service for SmartTrack / Plan2Milestone
+ */
+
+import { SmartTrackAppData, Milestone } from '../types';
+import { driveService } from './driveService';
+
+export const ROOT_FOLDER_NAME = '.AppData.SmartTrack';
+export const APP_FOLDER_NAME = 'smart-track-plan2milestone';
+export const DEFAULT_FILE_NAME = 'smart_track_plan2milestone.json';
+
+export interface SyncFolderStructure {
+  rootFolderId: string;
+  appFolderId: string;
+  appFolderName: string;
+  fileId?: string;
+}
+
+class SyncService {
+  /**
+   * Ensures default structure (.AppData.SmartTrack/Plan2Milestone) or returns custom sync folder
+   */
+  public async ensureFolderStructure(
+    appName: string = 'smart-track-plan2milestone',
+    customSyncFolderId?: string
+  ): Promise<SyncFolderStructure | null> {
+    if (!driveService.hasToken()) {
+      return null;
+    }
+
+    try {
+      if (customSyncFolderId && customSyncFolderId !== 'root') {
+        const customFolderMeta = await driveService.getFolderMetadata(customSyncFolderId);
+        const dataFile = await driveService.findFile(DEFAULT_FILE_NAME, customSyncFolderId);
+        return {
+          rootFolderId: customFolderMeta.parents?.[0] || 'root',
+          appFolderId: customSyncFolderId,
+          appFolderName: customFolderMeta.name,
+          fileId: dataFile?.id,
+        };
+      }
+
+      // Default 2-tier folder hierarchy
+      const rootFolder = await driveService.findOrCreateFolder(ROOT_FOLDER_NAME, 'root');
+      const appFolder = await driveService.findOrCreateFolder(appName || APP_FOLDER_NAME, rootFolder.id);
+      const dataFile = await driveService.findFile(DEFAULT_FILE_NAME, appFolder.id);
+
+      return {
+        rootFolderId: rootFolder.id,
+        appFolderId: appFolder.id,
+        appFolderName: appFolder.name,
+        fileId: dataFile?.id,
+      };
+    } catch (err) {
+      console.error('Error ensuring Drive folder structure:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Performs differential 2-way merge between local milestone dataset and remote Drive dataset
+   */
+  public mergeMilestones(localList: Milestone[], remoteList: Milestone[]): Milestone[] {
+    const milestoneMap = new Map<string, Milestone>();
+
+    // Add local milestones first
+    localList.forEach((item) => {
+      milestoneMap.set(item.id, item);
+    });
+
+    // Merge remote milestones
+    remoteList.forEach((remoteItem) => {
+      const localItem = milestoneMap.get(remoteItem.id);
+      if (!localItem) {
+        // New item from remote cloud
+        milestoneMap.set(remoteItem.id, remoteItem);
+      } else {
+        // Compare updatedAt timestamps
+        const localTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
+        const remoteTime = new Date(remoteItem.updatedAt || remoteItem.createdAt || 0).getTime();
+
+        if (remoteTime > localTime) {
+          milestoneMap.set(remoteItem.id, remoteItem);
+        }
+      }
+    });
+
+    return Array.from(milestoneMap.values());
+  }
+
+  /**
+   * Executes 2-way sync with Google Drive
+   */
+  public async syncAppData(
+    localData: SmartTrackAppData,
+    customFolderId?: string
+  ): Promise<{ appData: SmartTrackAppData; syncedAt: string; fileId: string }> {
+    const structure = await this.ensureFolderStructure(localData.appName, customFolderId);
+    if (!structure) {
+      throw new Error('Drive not connected');
+    }
+
+    let mergedData: SmartTrackAppData = { ...localData };
+    let targetFileId = structure.fileId;
+
+    // 1. Try reading existing cloud file if present
+    if (targetFileId) {
+      try {
+        const remoteData = await driveService.readFile<SmartTrackAppData>(targetFileId);
+        if (remoteData && Array.isArray(remoteData.milestones)) {
+          const mergedMilestones = this.mergeMilestones(localData.milestones, remoteData.milestones);
+          mergedData = {
+            ...localData,
+            milestones: mergedMilestones,
+            lastUpdated: new Date().toISOString(),
+          };
+        }
+      } catch (err) {
+        console.warn('Could not read remote file for merge, proceeding with local push:', err);
+      }
+    }
+
+    // 2. Save merged dataset back to Drive
+    const saveResult = await driveService.saveFile(
+      DEFAULT_FILE_NAME,
+      mergedData,
+      structure.appFolderId,
+      targetFileId
+    );
+
+    return {
+      appData: mergedData,
+      syncedAt: saveResult.modifiedTime,
+      fileId: saveResult.fileId,
+    };
+  }
+
+  /**
+   * Pulls latest dataset from Google Drive
+   */
+  public async pullFromDrive(
+    customFolderId?: string
+  ): Promise<{ appData: SmartTrackAppData; syncedAt: string } | null> {
+    const structure = await this.ensureFolderStructure('smart-track-plan2milestone', customFolderId);
+    if (!structure || !structure.fileId) {
+      return null;
+    }
+
+    const remoteData = await driveService.readFile<SmartTrackAppData>(structure.fileId);
+    return {
+      appData: remoteData,
+      syncedAt: new Date().toISOString(),
+    };
+  }
+}
+
+export const syncService = new SyncService();
+</file>
+
+<file path=".env.example">
+# GEMINI_API_KEY: Required for Gemini AI API calls.
+# AI Studio automatically injects this at runtime from user secrets.
+# Users configure this via the Secrets panel in the AI Studio UI.
+GEMINI_API_KEY="MY_GEMINI_API_KEY"
+
+# APP_URL: The URL where this applet is hosted.
+# AI Studio automatically injects this at runtime with the Cloud Run service URL.
+# Used for self-referential links, OAuth callbacks, and API endpoints.
+APP_URL="MY_APP_URL"
+
+# VITE_GOOGLE_CLIENT_ID: Google OAuth Client ID for Google Identity Services.
+VITE_GOOGLE_CLIENT_ID=
+</file>
+
+<file path="firebase-applet-config.json">
+{
+  "projectId": "smarttrack-day2day",
+  "appId": "1:973865168672:web:d1a432b0dcf9d96a573145",
+  "apiKey": "AIzaSyABevT369_WQWFmLskyrN--RcDNyRbDqzA",
+  "authDomain": "smarttrack-day2day.firebaseapp.com",
+  "storageBucket": "smarttrack-day2day.firebasestorage.app",
+  "messagingSenderId": "973865168672",
+  "measurementId": "",
+  "oAuthClientId": "973865168672-t00pf77pi7u1lpuhm4o6j2ipo2khth83.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
+}
+</file>
+
+</files>
