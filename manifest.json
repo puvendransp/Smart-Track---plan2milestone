@@ -1,0 +1,22 @@
+{
+  "short_name": "Plan2Milestone",
+  "name": "SmartTrack - Plan2Milestone",
+  "icons": [
+    {
+      "src": "pwa-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "pwa-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "display": "standalone",
+  "orientation": "portrait",
+  "description": "Simple days since tracker and milestone planner ecosystem with Google Drive and Calendar sync."
+}
