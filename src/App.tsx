@@ -6,10 +6,9 @@ import {
   SmartTrackAppData 
 } from './types';
 import { StorageService } from './services/storageService';
-import { GoogleDriveService, DRIVE_FOLDER_NAME, APP_SUBFOLDER_NAME } from './services/googleDriveService';
 import { driveService } from './services/driveService';
-import { syncService } from './services/syncService';
-import { googleSignIn, getStoredAccessToken, clearStoredAccessToken } from './services/authService';
+import { syncService, ROOT_FOLDER_NAME } from './services/syncService';
+import { googleSignIn, getStoredAccessToken, clearStoredAccessToken, fetchUserProfile } from './services/authService';
 import { GoogleCalendarService } from './services/googleCalendarService';
 import { DriveFolderBrowser } from './components/DriveFolderBrowser';
 import { Header } from './components/Header';
@@ -23,6 +22,8 @@ import { MilestoneDetailModal } from './components/MilestoneDetailModal';
 import { ResetModal } from './components/ResetModal';
 import { AdvanceCycleModal } from './components/AdvanceCycleModal';
 import { SettingsModal } from './components/SettingsModal';
+import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
+import { FolderSetupModal } from './components/FolderSetupModal';
 import { Plus, Sparkles, List, LayoutGrid, Clock } from 'lucide-react';
 
 export default function App() {
@@ -30,7 +31,7 @@ export default function App() {
   const [appData, setAppData] = useState<SmartTrackAppData>(() => StorageService.loadLocalData());
   const [viewMode, setViewMode] = useState<'list' | 'cards' | 'timeline'>('list');
   const [token, setToken] = useState<string | null>(() => getStoredAccessToken());
-  const [syncFolderId, setSyncFolderId] = useState<string>(() => localStorage.getItem('custom_sync_folder_id') || '');
+  const [syncFolderId, setSyncFolderId] = useState<string>(() => StorageService.getCustomSyncFolderId() || localStorage.getItem('custom_sync_folder_id') || '');
   const [syncFolderName, setSyncFolderName] = useState<string>(() => localStorage.getItem('custom_sync_folder_name') || 'smart-track-plan2milestone');
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   
@@ -39,7 +40,7 @@ export default function App() {
     isConnected: !!token,
     accessToken: token || undefined,
     isSyncing: false,
-    driveFolderPath: `${DRIVE_FOLDER_NAME}/${syncFolderName}`,
+    driveFolderPath: `${ROOT_FOLDER_NAME}/${syncFolderName}`,
     googleCalendarConnected: !!token,
   });
 
@@ -66,13 +67,15 @@ export default function App() {
   const [advancingMilestone, setAdvancingMilestone] = useState<Milestone | null>(null);
 
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [deletingMilestone, setDeletingMilestone] = useState<Milestone | null>(null);
+  const [isFolderSetupModalOpen, setIsFolderSetupModalOpen] = useState(false);
 
   // Auto-save local data on change
   useEffect(() => {
     StorageService.saveLocalData(appData);
   }, [appData]);
 
-  // Keep driveService token in sync
+  // Keep driveService token in sync, fetch profile, and verify folder setup on startup
   useEffect(() => {
     driveService.setToken(token);
     if (token) {
@@ -82,6 +85,39 @@ export default function App() {
         accessToken: token,
         googleCalendarConnected: true,
       }));
+
+      // Fetch user profile (email, name, picture)
+      fetchUserProfile(token).then(profile => {
+        if (profile.email || profile.picture || profile.name) {
+          setSyncStatus(prev => ({
+            ...prev,
+            userEmail: profile.email || prev.userEmail,
+            userName: profile.name || prev.userName,
+            userPicture: profile.picture || prev.userPicture,
+          }));
+        }
+      });
+
+      // Step 1 & 4: Only auto-sync if folder setup has been confirmed by user
+      if (StorageService.isFolderSetupConfirmed()) {
+        const savedFolderId = StorageService.getCustomSyncFolderId() || syncFolderId || undefined;
+        const localData = StorageService.loadLocalData();
+        syncService.syncAppData(localData, savedFolderId)
+          .then(result => {
+            if (result?.appData) {
+              setAppData(result.appData);
+              setSyncStatus(prev => ({
+                ...prev,
+                driveFileId: result.fileId,
+                lastSyncedAt: result.syncedAt,
+              }));
+            }
+          })
+          .catch(err => console.warn('Startup auto-sync error:', err));
+      } else {
+        // Account connected, but folder path not confirmed yet -> show folder setup modal
+        setIsFolderSetupModalOpen(true);
+      }
     }
   }, [token]);
 
@@ -90,7 +126,9 @@ export default function App() {
     if (!driveService.hasToken()) return;
     try {
       setSyncStatus(prev => ({ ...prev, isSyncing: true }));
-      const result = await syncService.syncAppData(appData, syncFolderId || undefined);
+      const savedFolderId = StorageService.getCustomSyncFolderId() || syncFolderId || undefined;
+      const localData = StorageService.loadLocalData();
+      const result = await syncService.syncAppData(localData, savedFolderId);
       setAppData(result.appData);
       setSyncStatus(prev => ({
         ...prev,
@@ -106,7 +144,7 @@ export default function App() {
     }
   };
 
-  // Google Login Handler
+  // Google Login Handler: resets folder setup confirmation so user is asked to verify folder path
   const handleConnectDrive = async () => {
     const res = await googleSignIn();
     if (res?.accessToken) {
@@ -117,12 +155,41 @@ export default function App() {
         isConnected: true,
         accessToken: res.accessToken,
         googleCalendarConnected: true,
+        userEmail: res.userEmail,
+        userName: res.userName,
+        userPicture: res.userPicture,
       }));
-      await runSync();
-      alert('Google Drive connected! Sync complete.');
-    } else {
-      alert('Could not authenticate with Google. Please try again.');
+      
+      // Step 1: Account connected -> trigger folder path check modal
+      StorageService.setFolderSetupConfirmed(false);
+      setIsFolderSetupModalOpen(true);
     }
+  };
+
+  // Handler once user confirms/creates/selects folder in FolderSetupModal
+  const handleFolderConfirmAndSync = async (confirmedFolderId?: string) => {
+    if (confirmedFolderId) {
+      setSyncFolderId(confirmedFolderId);
+    }
+    StorageService.setFolderSetupConfirmed(true);
+    await runSync();
+  };
+
+  // Disconnect Drive Handler
+  const handleDisconnectDrive = () => {
+    clearStoredAccessToken();
+    setToken(null);
+    driveService.setToken(null);
+    StorageService.setFolderSetupConfirmed(false);
+    setSyncStatus(prev => ({
+      ...prev,
+      isConnected: false,
+      accessToken: undefined,
+      googleCalendarConnected: false,
+      userEmail: undefined,
+      userName: undefined,
+      userPicture: undefined,
+    }));
   };
 
   // Push to Drive
@@ -143,7 +210,8 @@ export default function App() {
     }
     try {
       setSyncStatus(prev => ({ ...prev, isSyncing: true }));
-      const pulled = await syncService.pullFromDrive(syncFolderId || undefined);
+      const savedFolderId = StorageService.getCustomSyncFolderId() || syncFolderId || undefined;
+      const pulled = await syncService.pullFromDrive(savedFolderId);
       if (pulled && pulled.appData && Array.isArray(pulled.appData.milestones)) {
         setAppData(pulled.appData);
         setSyncStatus(prev => ({
@@ -194,12 +262,42 @@ export default function App() {
     }
   };
 
-  const handleDeleteMilestone = (id: string) => {
-    setAppData(prev => ({
-      ...prev,
-      milestones: prev.milestones.filter(m => m.id !== id),
-      lastUpdated: new Date().toISOString(),
-    }));
+  const handleDeleteMilestone = async (id: string) => {
+    if (!id) return;
+
+    const target = appData.milestones.find(m => m.id === id);
+
+    // 1. Immediately remove from local state and localStorage
+    let updatedAppData: SmartTrackAppData | null = null;
+    setAppData(prev => {
+      const updatedMilestones = prev.milestones.filter(m => m.id !== id);
+      updatedAppData = {
+        ...prev,
+        milestones: updatedMilestones,
+        lastUpdated: new Date().toISOString(),
+      };
+      StorageService.saveLocalData(updatedAppData);
+      return updatedAppData;
+    });
+
+    if (selectedMilestone?.id === id) {
+      setSelectedMilestone(null);
+    }
+
+    // 2. Delete Google Calendar event if synced
+    if (target?.googleCalendarEventId && syncStatus.accessToken) {
+      GoogleCalendarService.deleteCalendarEvent(syncStatus.accessToken, target.googleCalendarEventId)
+        .catch(err => console.warn('Google Calendar deletion warning:', err));
+    }
+
+    // 3. Save directly to Google Drive if connected
+    if (driveService.hasToken() && updatedAppData) {
+      try {
+        await syncService.saveAppDataDirect(updatedAppData, syncFolderId || undefined);
+      } catch (err) {
+        console.warn('Could not sync deletion to Google Drive immediately:', err);
+      }
+    }
   };
 
   const handleTogglePin = (milestone: Milestone, e: React.MouseEvent) => {
@@ -384,6 +482,20 @@ export default function App() {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
 
+      // Trackers with a counter of 0 (recently reset) are sorted to the bottom
+      const getCounterValue = (m: Milestone) => {
+        if (m.type === 'days_since') {
+          return Math.max(0, Math.floor((Date.now() - new Date(m.startDate).getTime()) / (1000 * 60 * 60 * 24)));
+        }
+        return null;
+      };
+
+      const cValA = getCounterValue(a);
+      const cValB = getCounterValue(b);
+
+      if (cValA === 0 && cValB !== null && cValB > 0) return 1;
+      if (cValB === 0 && cValA !== null && cValA > 0) return -1;
+
       if (filters.sortBy === 'category') {
         return filters.sortOrder === 'asc'
           ? a.category.localeCompare(b.category)
@@ -430,6 +542,9 @@ export default function App() {
       <Header
         onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
         syncStatus={syncStatus}
+        userEmail={syncStatus.userEmail}
+        userName={syncStatus.userName}
+        userPicture={syncStatus.userPicture}
       />
 
       {/* Main Content Container */}
@@ -438,49 +553,58 @@ export default function App() {
         {/* View Type Switcher (above Due In frame) & New Tracker Button */}
         <div className="flex w-full items-center justify-between gap-2 mb-4">
           
-          {/* View Mode Switcher Box */}
-          <div className="flex h-9 items-center rounded-xl bg-slate-900/90 p-1 border border-slate-800 shadow-sm shrink-0">
-            <button
-              id="view-list-btn"
-              onClick={() => setViewMode('list')}
-              className={`flex h-full items-center gap-1 rounded-lg px-2 sm:px-3 text-xs font-medium transition-all ${
-                viewMode === 'list'
-                  ? 'bg-slate-800 text-emerald-400 font-semibold shadow-sm border border-slate-700/80'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="List View"
+          {/* View Mode Switcher Box with explicit "View Toggle" Label */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 hidden sm:inline">
+              View Toggle:
+            </span>
+            <div 
+              className="flex h-9 items-center rounded-xl bg-slate-900/90 p-1 border border-slate-800 shadow-sm shrink-0"
+              title="View Toggle - Switch layout between List, Cards, and Timeline"
+              aria-label="View Toggle"
             >
-              <List className="h-3.5 w-3.5" />
-              <span className="hidden xs:inline">List</span>
-            </button>
+              <button
+                id="view-list-btn"
+                onClick={() => setViewMode('list')}
+                className={`flex h-full items-center gap-1.5 rounded-lg px-2.5 sm:px-3 text-xs font-semibold transition-all ${
+                  viewMode === 'list'
+                    ? 'bg-slate-800 text-emerald-400 shadow-sm border border-slate-700/80'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="View Toggle: List View"
+              >
+                <List className="h-3.5 w-3.5" />
+                <span className="inline">List</span>
+              </button>
 
-            <button
-              id="view-cards-btn"
-              onClick={() => setViewMode('cards')}
-              className={`flex h-full items-center gap-1 rounded-lg px-2 sm:px-3 text-xs font-medium transition-all ${
-                viewMode === 'cards'
-                  ? 'bg-slate-800 text-emerald-400 font-semibold shadow-sm border border-slate-700/80'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="Cards View"
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              <span className="hidden xs:inline">Cards</span>
-            </button>
+              <button
+                id="view-cards-btn"
+                onClick={() => setViewMode('cards')}
+                className={`flex h-full items-center gap-1.5 rounded-lg px-2.5 sm:px-3 text-xs font-semibold transition-all ${
+                  viewMode === 'cards'
+                    ? 'bg-slate-800 text-emerald-400 shadow-sm border border-slate-700/80'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="View Toggle: Cards View"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                <span className="inline">Cards</span>
+              </button>
 
-            <button
-              id="view-timeline-btn"
-              onClick={() => setViewMode('timeline')}
-              className={`flex h-full items-center gap-1 rounded-lg px-2 sm:px-3 text-xs font-medium transition-all ${
-                viewMode === 'timeline'
-                  ? 'bg-slate-800 text-emerald-400 font-semibold shadow-sm border border-slate-700/80'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="Timeline View"
-            >
-              <Clock className="h-3.5 w-3.5" />
-              <span className="hidden xs:inline">Timeline</span>
-            </button>
+              <button
+                id="view-timeline-btn"
+                onClick={() => setViewMode('timeline')}
+                className={`flex h-full items-center gap-1.5 rounded-lg px-2.5 sm:px-3 text-xs font-semibold transition-all ${
+                  viewMode === 'timeline'
+                    ? 'bg-slate-800 text-emerald-400 shadow-sm border border-slate-700/80'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="View Toggle: Timeline View"
+              >
+                <Clock className="h-3.5 w-3.5" />
+                <span className="inline">Timeline</span>
+              </button>
+            </div>
           </div>
 
           {/* Add New Action Button - ml-auto & shrink-0 ensures flush right alignment on mobile */}
@@ -524,10 +648,8 @@ export default function App() {
             onAdvanceCycle={(m, e) => handleOpenAdvanceModal(m, e)}
             onTogglePin={handleTogglePin}
             onDelete={(m, e) => {
-              e.stopPropagation();
-              if (confirm(`Delete "${m.title}"?`)) {
-                handleDeleteMilestone(m.id);
-              }
+              if (e) e.stopPropagation();
+              setDeletingMilestone(m);
             }}
           />
         )}
@@ -550,10 +672,8 @@ export default function App() {
                     onAdvanceCycle={(m, e) => handleOpenAdvanceModal(m, e)}
                     onTogglePin={handleTogglePin}
                     onDelete={(m, e) => {
-                      e.stopPropagation();
-                      if (confirm(`Delete "${m.title}"?`)) {
-                        handleDeleteMilestone(m.id);
-                      }
+                      if (e) e.stopPropagation();
+                      setDeletingMilestone(m);
                     }}
                     accessToken={syncStatus.accessToken}
                   />
@@ -607,9 +727,22 @@ export default function App() {
           setEditingMilestone(m);
           setIsFormModalOpen(true);
         }}
-        onDelete={handleDeleteMilestone}
+        onDelete={(id) => {
+          const target = appData.milestones.find(m => m.id === id);
+          if (target) {
+            setSelectedMilestone(null);
+            setDeletingMilestone(target);
+          }
+        }}
         onOpenResetModal={(m) => handleOpenResetModal(m)}
         onOpenAdvanceModal={(m) => handleOpenAdvanceModal(m)}
+      />
+
+      <ConfirmDeleteModal
+        isOpen={!!deletingMilestone}
+        milestone={deletingMilestone}
+        onClose={() => setDeletingMilestone(null)}
+        onConfirm={handleDeleteMilestone}
       />
 
       <ResetModal
@@ -631,6 +764,7 @@ export default function App() {
         onClose={() => setIsSettingsModalOpen(false)}
         syncStatus={syncStatus}
         onConnectDrive={handleConnectDrive}
+        onDisconnectDrive={handleDisconnectDrive}
         onPushToDrive={handlePushToDrive}
         onPullFromDrive={handlePullFromDrive}
         appData={appData}
@@ -651,6 +785,13 @@ export default function App() {
           localStorage.setItem('custom_sync_folder_name', folderName);
           runSync();
         }}
+      />
+
+      <FolderSetupModal
+        isOpen={isFolderSetupModalOpen}
+        onClose={() => setIsFolderSetupModalOpen(false)}
+        onConfirmAndSync={handleFolderConfirmAndSync}
+        accessToken={token || ''}
       />
 
       {/* Simple Footer */}

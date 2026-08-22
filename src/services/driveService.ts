@@ -73,6 +73,65 @@ class DriveService {
   }
 
   /**
+   * Searches anywhere in Drive for parent folder (.AppData.SmartTrack or AppData.SmartTrack) without creating
+   */
+  public async findParentFolder(folderName: string = '.AppData.SmartTrack'): Promise<DriveFileItem | null> {
+    const q = encodeURIComponent(
+      `(name = '${folderName}' or name = 'AppData.SmartTrack') and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+    );
+    const searchUrl = `${DRIVE_API_BASE}?q=${q}&fields=files(id,name,mimeType,parents)`;
+    const searchRes = await this.fetchApi<{ files: DriveFileItem[] }>(searchUrl);
+
+    if (searchRes.files && searchRes.files.length > 0) {
+      return searchRes.files[0];
+    }
+    return null;
+  }
+
+  /**
+   * Searches for a subfolder inside parent folder without creating
+   */
+  public async findFolder(folderName: string, parentFolderId: string = 'root'): Promise<DriveFileItem | null> {
+    const q = encodeURIComponent(
+      `name = '${folderName.replace(/'/g, "\\'")}' and '${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+    );
+    const searchUrl = `${DRIVE_API_BASE}?q=${q}&fields=files(id,name,mimeType,parents)`;
+    const searchRes = await this.fetchApi<{ files: DriveFileItem[] }>(searchUrl);
+
+    if (searchRes.files && searchRes.files.length > 0) {
+      return searchRes.files[0];
+    }
+    return null;
+  }
+
+  /**
+   * Searches anywhere in Drive for parent folder (.AppData.SmartTrack or AppData.SmartTrack)
+   */
+  public async findOrCreateParentFolder(folderName: string = '.AppData.SmartTrack'): Promise<DriveFileItem> {
+    const q = encodeURIComponent(
+      `(name = '${folderName}' or name = 'AppData.SmartTrack') and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+    );
+    const searchUrl = `${DRIVE_API_BASE}?q=${q}&fields=files(id,name,mimeType,parents)`;
+    const searchRes = await this.fetchApi<{ files: DriveFileItem[] }>(searchUrl);
+
+    if (searchRes.files && searchRes.files.length > 0) {
+      return searchRes.files[0];
+    }
+
+    // Create .AppData.SmartTrack if not found anywhere
+    const createRes = await this.fetchApi<DriveFileItem>(DRIVE_API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: folderName,
+        mimeType: 'application/vnd.google-apps.folder',
+      }),
+    });
+
+    return createRes;
+  }
+
+  /**
    * Searches for a subfolder by name or creates it inside parent folder
    */
   public async findOrCreateFolder(folderName: string, parentFolderId: string = 'root'): Promise<DriveFileItem> {
@@ -217,6 +276,96 @@ class DriveService {
     }
 
     return response.json() as Promise<T>;
+  }
+
+  /**
+   * Helper to load Google GAPI & Picker library dynamically
+   */
+  private async loadPickerLibrary(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const w = window as any;
+      if (w.gapi && w.google?.picker) {
+        resolve();
+        return;
+      }
+
+      let script = document.getElementById('google-api-script') as HTMLScriptElement;
+      if (!script) {
+        script = document.createElement('script');
+        script.id = 'google-api-script';
+        script.src = 'https://apis.google.com/js/api.js';
+        script.async = true;
+        document.body.appendChild(script);
+      }
+
+      const checkAndLoad = () => {
+        if (w.gapi) {
+          w.gapi.load('picker', {
+            callback: () => {
+              if (w.google?.picker) {
+                resolve();
+              } else {
+                reject(new Error("Failed to initialize Google Picker sub-library"));
+              }
+            },
+            onerror: () => reject(new Error("Gapi load 'picker' failed")),
+          });
+        } else {
+          setTimeout(checkAndLoad, 100);
+        }
+      };
+
+      script.onload = checkAndLoad;
+      script.onerror = () => reject(new Error("Failed to load Google API script tag"));
+    });
+  }
+
+  /**
+   * Displays Google Drive Folder Picker UI
+   */
+/**
+   * Displays Google Drive Folder Picker UI
+   */
+  public async showFolderPicker(
+    accessToken: string,
+    onFolderSelect: (id: string, name: string) => void
+  ): Promise<void> {
+    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY || '';
+
+    if (!apiKey) {
+      console.warn(
+        'VITE_GOOGLE_API_KEY is not defined in environment variables. Google Picker requires a Developer API Key.'
+      );
+    }
+
+    await this.loadPickerLibrary();
+    const w = window as any;
+    const google = w.google;
+
+    if (!google?.picker) {
+      throw new Error('Google Picker library not loaded.');
+    }
+
+    const docsView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+      .setMimeTypes('application/vnd.google-apps.folder')
+      .setSelectFolderEnabled(true);
+
+    const builder = new google.picker.PickerBuilder()
+      .addView(docsView)
+      .setOAuthToken(accessToken)
+      .setDeveloperKey(apiKey)
+      .setAppId('614372660797')
+      .setCallback((data: any) => {
+        if (data[google.picker.Response.ACTION] === google.picker.Action.PICKED) {
+          const doc = data[google.picker.Response.DOCUMENTS][0];
+          const id = doc[google.picker.Document.ID];
+          const name = doc[google.picker.Document.NAME];
+          onFolderSelect(id, name);
+        }
+      });
+
+    const picker = builder.build();
+    picker.setVisible(true);
   }
 }
 

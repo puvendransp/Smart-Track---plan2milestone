@@ -191,10 +191,7 @@ export const MilestoneDetailModal: React.FC<MilestoneDetailModalProps> = ({
         <div className="flex items-center justify-between border-t border-slate-800/80 pt-4 mt-5">
           <button
             onClick={() => {
-              if (confirm('Are you sure you want to delete this milestone?')) {
-                onDelete(milestone.id);
-                onClose();
-              }
+              onDelete(milestone.id);
             }}
             className="flex items-center gap-1.5 rounded-xl border border-rose-500/20 bg-rose-500/5 px-3.5 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500/15 hover:border-rose-500/30 transition-all"
           >

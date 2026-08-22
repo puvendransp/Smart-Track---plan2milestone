@@ -10,6 +10,7 @@ import {
   Calendar, 
   Pin, 
   MoreVertical, 
+  Trash2,
   Download, 
   ExternalLink,
   ChevronRight,
@@ -86,25 +87,24 @@ export const MilestoneCard: React.FC<MilestoneCardProps> = ({
       {/* Top Bar: Type, Category, Pin */}
       <div>
         <div className="flex items-center justify-between gap-1.5 mb-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            
-            {/* Type badge */}
-            <span className="flex items-center gap-1 rounded-md bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300 border border-slate-700/80">
-              {milestone.type === 'days_since' && <Clock className="h-3 w-3 text-emerald-400" />}
-              {milestone.type === 'repeating' && <Repeat className="h-3 w-3 text-violet-400" />}
-              {milestone.type === 'event_countdown' && <Target className="h-3 w-3 text-blue-400" />}
-              <span>
-                {milestone.type === 'days_since' && 'Days Since'}
-                {milestone.type === 'repeating' && 'Recurrence'}
-                {milestone.type === 'event_countdown' && 'Countdown'}
-              </span>
+          <div className="flex items-center gap-1.5">
+            {/* Minimalist Frameless Type Icon */}
+            <span
+              className="flex h-5 w-5 items-center justify-center shrink-0"
+              title={
+                milestone.type === 'days_since' ? 'Days Since' :
+                milestone.type === 'repeating' ? 'Recurrence' : 'Countdown'
+              }
+            >
+              {milestone.type === 'days_since' && <Clock className="h-3.5 w-3.5 text-emerald-400" />}
+              {milestone.type === 'repeating' && <Repeat className="h-3.5 w-3.5 text-violet-400" />}
+              {milestone.type === 'event_countdown' && <Target className="h-3.5 w-3.5 text-blue-400" />}
             </span>
 
-            {/* Category badge */}
-            <span className={`rounded-md px-2 py-0.5 text-[10px] font-medium border uppercase tracking-wider ${getCategoryColor(milestone.category)}`}>
+            {/* Minimalist Category Tag */}
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               {milestone.category}
             </span>
-
           </div>
 
           {/* Quick Actions */}
@@ -126,6 +126,13 @@ export const MilestoneCard: React.FC<MilestoneCardProps> = ({
               title="Edit milestone"
             >
               <MoreVertical className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={(e) => onDelete(milestone, e)}
+              className="rounded-md p-1 text-slate-500 hover:text-rose-400 transition-colors"
+              title="Delete milestone"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>

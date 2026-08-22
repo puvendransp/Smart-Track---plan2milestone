@@ -1,5 +1,5 @@
 {
-  "name": "smart-track-plan2milestone",
+  "name": "Plan2Milestone",
   "description": "Days since tracker, repeating milestone reminders, and event scheduling synchronized with Google Calendar, Apple Calendar, and Google Drive.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

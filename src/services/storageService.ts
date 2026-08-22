@@ -1,11 +1,10 @@
 import { Milestone, SmartTrackAppData } from '../types';
-import { INITIAL_MILESTONES } from '../data/initialData';
 
 const LOCAL_STORAGE_KEY = 'smarttrack_plan2milestone_v1';
 
 export class StorageService {
   /**
-   * Reads data from localStorage or initializes with initial milestones
+   * Reads data from localStorage or initializes with empty milestones
    */
   public static loadLocalData(): SmartTrackAppData {
     try {
@@ -23,8 +22,8 @@ export class StorageService {
     const defaultData: SmartTrackAppData = {
       version: '1.0.0',
       lastUpdated: new Date().toISOString(),
-      appName: 'smart-track-plan2milestone',
-      milestones: INITIAL_MILESTONES,
+      appName: 'Plan2Milestone',
+      milestones: [],
       userPreferences: {
         theme: 'dark',
         defaultView: 'cards',
@@ -48,14 +47,14 @@ export class StorageService {
   }
 
   /**
-   * Resets local storage to default sample data
+   * Resets local storage to empty data
    */
   public static resetToDefault(): SmartTrackAppData {
     const defaultData: SmartTrackAppData = {
       version: '1.0.0',
       lastUpdated: new Date().toISOString(),
-      appName: 'smart-track-plan2milestone',
-      milestones: INITIAL_MILESTONES,
+      appName: 'Plan2Milestone',
+      milestones: [],
       userPreferences: {
         theme: 'dark',
         defaultView: 'cards',
@@ -63,5 +62,24 @@ export class StorageService {
     };
     this.saveLocalData(defaultData);
     return defaultData;
+  }
+
+  /**
+   * Helper methods for custom Google Drive sync folder ID
+   */
+  public static getCustomSyncFolderId(): string | null {
+    return localStorage.getItem('smarttrack_custom_sync_folder_id');
+  }
+
+  public static setCustomSyncFolderId(folderId: string): void {
+    localStorage.setItem('smarttrack_custom_sync_folder_id', folderId);
+  }
+
+  public static isFolderSetupConfirmed(): boolean {
+    return localStorage.getItem('smarttrack_folder_setup_confirmed') === 'true';
+  }
+
+  public static setFolderSetupConfirmed(confirmed: boolean): void {
+    localStorage.setItem('smarttrack_folder_setup_confirmed', confirmed ? 'true' : 'false');
   }
 }

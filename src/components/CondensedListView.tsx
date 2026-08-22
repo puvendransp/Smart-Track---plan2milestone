@@ -119,14 +119,14 @@ export const CondensedListView: React.FC<CondensedListViewProps> = ({
                 )}
               </div>
 
-              {/* Title, Category & Dates */}
+              {/* Title & Dates */}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 min-w-0 flex-1">
                     {item.pinned && (
                       <Pin className="h-3 w-3 text-amber-400 fill-amber-400/20 shrink-0" />
                     )}
-                    <h3 className={`text-xs font-bold text-slate-100 transition-colors truncate ${
+                    <h3 className={`text-xs sm:text-sm font-bold text-slate-100 transition-colors truncate ${
                       isDaysSince ? 'group-hover:text-emerald-300' :
                       isRepeating ? 'group-hover:text-violet-300' :
                       'group-hover:text-blue-300'
@@ -134,15 +134,23 @@ export const CondensedListView: React.FC<CondensedListViewProps> = ({
                       {item.title}
                     </h3>
                   </div>
-                  
-                  {/* Category Pill aligned on right */}
-                  <span className="shrink-0 inline-flex items-center rounded-md bg-slate-800/90 px-2 py-0.5 text-[10px] font-semibold text-slate-300 border border-slate-700/80 uppercase tracking-wide">
-                    {item.category}
-                  </span>
+
+                  {/* Requirement 4: On Mobile View, Cycles/Resets Indication moved to Top Right */}
+                  <div className="sm:hidden shrink-0 flex items-center gap-1.5">
+                    {item.completedCycles && item.completedCycles > 0 ? (
+                      <span className="text-violet-400 text-xs font-bold flex items-center gap-1">
+                        ↻ {item.completedCycles} cycles
+                      </span>
+                    ) : item.resetHistory && item.resetHistory.length > 0 ? (
+                      <span className="text-slate-400 text-xs font-medium">
+                        ({item.resetHistory.length} resets)
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
 
                 {/* Subtext info */}
-                <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-400">
+                <div className="flex items-center gap-2 sm:gap-3 mt-1 text-[11px] text-slate-400">
                   {isDaysSince ? (
                     <span>Since: <strong className="text-slate-300 font-medium">{formatDate(item.startDate)}</strong></span>
                   ) : (
@@ -150,13 +158,13 @@ export const CondensedListView: React.FC<CondensedListViewProps> = ({
                   )}
 
                   {item.resetHistory && item.resetHistory.length > 0 && (
-                    <span className="text-slate-500 text-[10px]">
+                    <span className="hidden sm:inline text-slate-500 text-[10px]">
                       ({item.resetHistory.length} resets)
                     </span>
                   )}
 
                   {item.completedCycles && item.completedCycles > 0 ? (
-                    <span className="text-violet-400 text-[10px] font-medium">
+                    <span className="hidden sm:inline text-violet-400 text-[10px] font-medium">
                       ↻ {item.completedCycles} cycles
                     </span>
                   ) : null}
@@ -164,10 +172,19 @@ export const CondensedListView: React.FC<CondensedListViewProps> = ({
               </div>
             </div>
 
-            {/* Right side: Uniform Action Box & 3-Dot Options */}
-            <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-0 border-slate-800/80 shrink-0">
-              
-              {/* Perfectly Aligned Primary Box across all types */}
+            {/* Requirement 1: DESKTOP RIGHT CONTAINER - Category center-aligned next to Action Box */}
+            <div className="hidden sm:flex items-center gap-3 shrink-0">
+              {/* Category Tag next to Action Box (Font size reduced by 2pt) */}
+              <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <span className="shrink-0">
+                  {isDaysSince && <Clock className="h-3 w-3 text-emerald-400" />}
+                  {isRepeating && <Repeat className="h-3 w-3 text-violet-400" />}
+                  {!isDaysSince && !isRepeating && <Calendar className="h-3 w-3 text-blue-400" />}
+                </span>
+                <span>{item.category}</span>
+              </span>
+
+              {/* Primary Action Box */}
               <div className="w-28 flex justify-center shrink-0">
                 {isDaysSince ? (
                   <button
@@ -195,7 +212,7 @@ export const CondensedListView: React.FC<CondensedListViewProps> = ({
                 )}
               </div>
 
-              {/* 3-Dot Options Menu Button */}
+              {/* Desktop 3-Dot Options Button */}
               <div className="relative shrink-0">
                 <button
                   onClick={(e) => {
@@ -249,7 +266,104 @@ export const CondensedListView: React.FC<CondensedListViewProps> = ({
                   </div>
                 )}
               </div>
+            </div>
 
+            {/* MOBILE BOTTOM ROW - Slimmer frame with reduced padding and category font size */}
+            <div className="flex sm:hidden items-center justify-between gap-1.5 pt-1 border-t border-slate-800/40 mt-0.5 w-full shrink-0">
+              {/* Category Tag Far Left */}
+              <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                <span className="shrink-0">
+                  {isDaysSince && <Clock className="h-3 w-3 text-emerald-400" />}
+                  {isRepeating && <Repeat className="h-3 w-3 text-violet-400" />}
+                  {!isDaysSince && !isRepeating && <Calendar className="h-3 w-3 text-blue-400" />}
+                </span>
+                <span>{item.category}</span>
+              </span>
+
+              {/* Far Right Action Box + 3-Dots (Slimmer height h-7) */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div className="w-24 flex justify-center shrink-0">
+                  {isDaysSince ? (
+                    <button
+                      onClick={(e) => onResetCounter(item, e)}
+                      className="w-full h-7 flex items-center justify-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition-all shadow-sm"
+                      title="Reset Counter to Day 0"
+                    >
+                      <RotateCcw className="h-3 w-3 text-emerald-400" />
+                      <span>Reset</span>
+                    </button>
+                  ) : isRepeating ? (
+                    <button
+                      onClick={(e) => onAdvanceCycle(item, e)}
+                      className="w-full h-7 flex items-center justify-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 text-[11px] font-bold text-violet-300 hover:bg-violet-500/20 active:scale-95 transition-all shadow-sm"
+                      title="Advance to Next Cycle"
+                    >
+                      <Repeat className="h-3 w-3 text-violet-400" />
+                      <span>Next Cycle</span>
+                    </button>
+                  ) : (
+                    <div className="w-full h-7 flex items-center justify-center gap-1 rounded-md border border-blue-500/30 bg-blue-500/10 px-2 text-[11px] font-bold text-blue-300 shadow-sm">
+                      <Calendar className="h-3 w-3 text-blue-400" />
+                      <span>Countdown</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mobile 3-Dot Options Button (Slimmer h-7 w-7) */}
+                <div className="relative shrink-0">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveMenuId(isMenuOpen ? null : item.id);
+                    }}
+                    className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700 hover:text-slate-200 transition-all"
+                    title="Tracker Options"
+                  >
+                    <MoreVertical className="h-3.5 w-3.5" />
+                  </button>
+
+                  {/* Dropdown Popover */}
+                  {isMenuOpen && (
+                    <div 
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-0 top-8 z-40 min-w-[130px] rounded-xl border border-slate-800 bg-slate-950 p-1 shadow-2xl backdrop-blur-md"
+                    >
+                      <button
+                        onClick={(e) => {
+                          setActiveMenuId(null);
+                          onTogglePin(item, e);
+                        }}
+                        className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 transition-all text-left"
+                      >
+                        <Pin className={`h-3.5 w-3.5 ${item.pinned ? 'text-amber-400 fill-amber-400' : 'text-slate-400'}`} />
+                        <span>{item.pinned ? 'Unpin' : 'Pin to top'}</span>
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          setActiveMenuId(null);
+                          onEdit(item, e);
+                        }}
+                        className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 transition-all text-left"
+                      >
+                        <Edit3 className="h-3.5 w-3.5 text-slate-400" />
+                        <span>Edit</span>
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          setActiveMenuId(null);
+                          onDelete(item, e);
+                        }}
+                        className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 transition-all text-left"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
           </div>

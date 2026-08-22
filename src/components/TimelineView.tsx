@@ -56,9 +56,16 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                     <span className="text-[11px] font-mono font-bold text-slate-300">
                       {formatDate(ms.targetDate || ms.startDate)}
                     </span>
-                    <span className="rounded-md bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300 uppercase tracking-wider">
-                      {ms.category}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="shrink-0">
+                        {ms.type === 'days_since' && <Clock className="h-3 w-3 text-emerald-400" />}
+                        {ms.type === 'repeating' && <Repeat className="h-3 w-3 text-violet-400" />}
+                        {ms.type === 'event_countdown' && <Target className="h-3 w-3 text-blue-400" />}
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        {ms.category}
+                      </span>
+                    </div>
                   </div>
 
                   <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${

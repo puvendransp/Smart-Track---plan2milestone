@@ -1,10 +1,10 @@
-This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
 
 <file_summary>
 This section contains a summary of this file.
 
 <purpose>
-This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+This file contains a packed representation of the entire repository's contents.
 It is designed to be easily consumable by AI systems for analysis, code review,
 or other automated processes.
 </purpose>
@@ -32,7 +32,6 @@ The content is organized as follows:
 <notes>
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Only files matching these patterns are included: src/services/**, firebase-applet-config.json, .env.example
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -42,6 +41,21 @@ The content is organized as follows:
 
 <directory_structure>
 src/
+  components/
+    AdvanceCycleModal.tsx
+    CondensedListView.tsx
+    DriveFolderBrowser.tsx
+    FilterBar.tsx
+    Header.tsx
+    MilestoneCard.tsx
+    MilestoneDetailModal.tsx
+    MilestoneFormModal.tsx
+    ResetModal.tsx
+    SettingsModal.tsx
+    StatsOverview.tsx
+    TimelineView.tsx
+  data/
+    initialData.ts
   services/
     authService.ts
     driveService.ts
@@ -49,12 +63,2627 @@ src/
     googleDriveService.ts
     storageService.ts
     syncService.ts
+  utils/
+    dateUtils.ts
+  App.tsx
+  index.css
+  main.tsx
+  types.ts
+  vite-env.d.ts
 .env.example
+.gitignore
 firebase-applet-config.json
+index.html
+manifest.json
+metadata.json
+package.json
+sw.js
+tsconfig.json
+vite.config.ts
 </directory_structure>
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="src/components/AdvanceCycleModal.tsx">
+import React, { useState } from 'react';
+import { Milestone } from '../types';
+import { Repeat, X, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { formatDate } from '../utils/dateUtils';
+
+interface AdvanceCycleModalProps {
+  isOpen: boolean;
+  milestone: Milestone | null;
+  onClose: () => void;
+  onConfirmAdvance: (milestoneId: string, note: string) => void;
+}
+
+export const AdvanceCycleModal: React.FC<AdvanceCycleModalProps> = ({
+  isOpen,
+  milestone,
+  onClose,
+  onConfirmAdvance,
+}) => {
+  const [note, setNote] = useState('');
+
+  if (!isOpen || !milestone) return null;
+
+  const currentCycleNumber = (milestone.completedCycles || 0) + 1;
+  const currentTarget = new Date(milestone.targetDate || milestone.startDate);
+
+  // Calculate next target date
+  let nextTarget = new Date(currentTarget);
+  switch (milestone.repeatInterval) {
+    case 'daily':
+      nextTarget.setDate(nextTarget.getDate() + 1);
+      break;
+    case 'weekly':
+      nextTarget.setDate(nextTarget.getDate() + 7);
+      break;
+    case 'monthly':
+      nextTarget.setMonth(nextTarget.getMonth() + 1);
+      break;
+    case 'quarterly':
+      nextTarget.setMonth(nextTarget.getMonth() + 3);
+      break;
+    case 'yearly':
+      nextTarget.setFullYear(nextTarget.getFullYear() + 1);
+      break;
+    case 'custom':
+      nextTarget.setDate(nextTarget.getDate() + (milestone.customRepeatDays || 30));
+      break;
+    default:
+      nextTarget.setMonth(nextTarget.getMonth() + 1);
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onConfirmAdvance(milestone.id, note.trim());
+    setNote('');
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div className="relative w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20">
+              <Repeat className="h-4 w-4" />
+            </div>
+            <h3 className="text-base font-bold text-slate-100">
+              Complete Cycle #{currentCycleNumber}
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Target Shift Banner */}
+        <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 mb-4">
+          <p className="text-[11px] font-semibold text-violet-400 uppercase tracking-wider mb-2">
+            {milestone.title}
+          </p>
+          
+          <div className="flex items-center justify-between bg-slate-900/90 rounded-lg p-3 border border-slate-800/80">
+            <div>
+              <div className="text-[10px] text-slate-400 font-medium uppercase">Current Target</div>
+              <div className="text-xs font-bold text-slate-200 font-mono mt-0.5">
+                {formatDate(currentTarget.toISOString())}
+              </div>
+            </div>
+
+            <ArrowRight className="h-4 w-4 text-violet-400 shrink-0" />
+
+            <div>
+              <div className="text-[10px] text-violet-400 font-medium uppercase">Next Target</div>
+              <div className="text-xs font-bold text-violet-300 font-mono mt-0.5">
+                {formatDate(nextTarget.toISOString())}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Log Completion Note / Reflections (Optional)
+            </label>
+            <textarea
+              rows={3}
+              placeholder="e.g., Finished weekly review on time, completed all items..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-100 placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+            />
+          </div>
+
+          <p className="text-[11px] text-slate-400 bg-violet-500/5 border border-violet-500/15 rounded-lg p-2.5">
+            💡 Completing Cycle #{currentCycleNumber} will increment your cycle count, advance the target date to {formatDate(nextTarget.toISOString())}, and save this note in your completion history.
+          </p>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-md shadow-violet-500/20 hover:brightness-110"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span>Confirm & Advance</span>
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="src/components/CondensedListView.tsx">
+import React, { useState } from 'react';
+import { Milestone } from '../types';
+import { formatDate } from '../utils/dateUtils';
+import { 
+  Pin, 
+  RotateCcw, 
+  Calendar, 
+  Sparkles, 
+  MoreVertical, 
+  Edit3, 
+  Trash2, 
+  Clock, 
+  Repeat,
+  CheckCircle2
+} from 'lucide-react';
+
+interface CondensedListViewProps {
+  milestones: Milestone[];
+  onSelect: (milestone: Milestone) => void;
+  onEdit: (milestone: Milestone, e: React.MouseEvent) => void;
+  onResetCounter: (milestone: Milestone, e: React.MouseEvent) => void;
+  onAdvanceCycle: (milestone: Milestone, e: React.MouseEvent) => void;
+  onTogglePin: (milestone: Milestone, e: React.MouseEvent) => void;
+  onDelete: (milestone: Milestone, e: React.MouseEvent) => void;
+}
+
+export const CondensedListView: React.FC<CondensedListViewProps> = ({
+  milestones,
+  onSelect,
+  onEdit,
+  onResetCounter,
+  onAdvanceCycle,
+  onTogglePin,
+  onDelete,
+}) => {
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
+  // Helper to calculate days since
+  const getDaysSince = (startDate: string) => {
+    const diffMs = Date.now() - new Date(startDate).getTime();
+    return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  };
+
+  // Helper to calculate days remaining
+  const getDaysRemaining = (targetDate?: string) => {
+    if (!targetDate) return null;
+    const diffMs = new Date(targetDate).getTime() - Date.now();
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  };
+
+  if (milestones.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-800 bg-slate-900/30 p-10 text-center">
+        <Sparkles className="mx-auto h-8 w-8 text-slate-600 mb-2" />
+        <h3 className="text-sm font-bold text-slate-300">No Trackers Found</h3>
+        <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+          No trackers match your current search or filter criteria.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {milestones.map((item) => {
+        const isDaysSince = item.type === 'days_since';
+        const isRepeating = item.type === 'repeating';
+        const daysSinceCount = getDaysSince(item.startDate);
+        const daysRemaining = getDaysRemaining(item.targetDate);
+        const isMenuOpen = activeMenuId === item.id;
+
+        return (
+          <div
+            key={item.id}
+            onClick={() => onSelect(item)}
+            className={`group relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border p-3 transition-all cursor-pointer ${
+              item.pinned
+                ? 'border-emerald-500/40 bg-gradient-to-r from-emerald-950/20 via-slate-900 to-slate-900 shadow-sm'
+                : 'border-slate-800/80 bg-slate-900/80 hover:border-slate-700 hover:bg-slate-900'
+            }`}
+          >
+            {/* Left side: Badge & Main details */}
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              
+              {/* Type Badge Box */}
+              <div className="shrink-0">
+                {isDaysSince ? (
+                  <div className="flex flex-col items-center justify-center h-11 w-12 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-1 py-1 text-center">
+                    <span className="text-base font-extrabold text-emerald-400 leading-none">
+                      {daysSinceCount}
+                    </span>
+                    <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-tight mt-0.5">
+                      Days
+                    </span>
+                  </div>
+                ) : (
+                  <div className={`flex flex-col items-center justify-center h-11 w-12 rounded-lg border px-1 py-1 text-center ${
+                    daysRemaining !== null && daysRemaining < 0
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                      : daysRemaining !== null && daysRemaining <= 3
+                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                      : isRepeating
+                      ? 'bg-violet-500/10 border-violet-500/30 text-violet-400'
+                      : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                  }`}>
+                    {daysRemaining !== null ? (
+                      <>
+                        <span className="text-base font-extrabold leading-none">
+                          {Math.abs(daysRemaining)}
+                        </span>
+                        <span className="text-[9px] font-bold uppercase tracking-tight mt-0.5">
+                          {daysRemaining < 0 ? 'Over' : 'Left'}
+                        </span>
+                      </>
+                    ) : (
+                      <Clock className="h-4 w-4 text-blue-400" />
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Title, Category & Dates */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    {item.pinned && (
+                      <Pin className="h-3 w-3 text-amber-400 fill-amber-400/20 shrink-0" />
+                    )}
+                    <h3 className={`text-xs font-bold text-slate-100 transition-colors truncate ${
+                      isDaysSince ? 'group-hover:text-emerald-300' :
+                      isRepeating ? 'group-hover:text-violet-300' :
+                      'group-hover:text-blue-300'
+                    }`}>
+                      {item.title}
+                    </h3>
+                  </div>
+                  
+                  {/* Category Pill aligned on right */}
+                  <span className="shrink-0 inline-flex items-center rounded-md bg-slate-800/90 px-2 py-0.5 text-[10px] font-semibold text-slate-300 border border-slate-700/80 uppercase tracking-wide">
+                    {item.category}
+                  </span>
+                </div>
+
+                {/* Subtext info */}
+                <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-400">
+                  {isDaysSince ? (
+                    <span>Since: <strong className="text-slate-300 font-medium">{formatDate(item.startDate)}</strong></span>
+                  ) : (
+                    <span>Target: <strong className="text-slate-300 font-medium">{formatDate(item.targetDate)}</strong></span>
+                  )}
+
+                  {item.resetHistory && item.resetHistory.length > 0 && (
+                    <span className="text-slate-500 text-[10px]">
+                      ({item.resetHistory.length} resets)
+                    </span>
+                  )}
+
+                  {item.completedCycles && item.completedCycles > 0 ? (
+                    <span className="text-violet-400 text-[10px] font-medium">
+                      ↻ {item.completedCycles} cycles
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {/* Right side: Uniform Action Box & 3-Dot Options */}
+            <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-0 border-slate-800/80 shrink-0">
+              
+              {/* Perfectly Aligned Primary Box across all types */}
+              <div className="w-28 flex justify-center shrink-0">
+                {isDaysSince ? (
+                  <button
+                    onClick={(e) => onResetCounter(item, e)}
+                    className="w-full h-8 flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition-all shadow-sm"
+                    title="Reset Counter to Day 0"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 text-emerald-400" />
+                    <span>Reset</span>
+                  </button>
+                ) : isRepeating ? (
+                  <button
+                    onClick={(e) => onAdvanceCycle(item, e)}
+                    className="w-full h-8 flex items-center justify-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 text-xs font-bold text-violet-300 hover:bg-violet-500/20 active:scale-95 transition-all shadow-sm"
+                    title="Advance to Next Cycle"
+                  >
+                    <Repeat className="h-3.5 w-3.5 text-violet-400" />
+                    <span>Next Cycle</span>
+                  </button>
+                ) : (
+                  <div className="w-full h-8 flex items-center justify-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 text-xs font-bold text-blue-300 shadow-sm">
+                    <Calendar className="h-3.5 w-3.5 text-blue-400" />
+                    <span>Countdown</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 3-Dot Options Menu Button */}
+              <div className="relative shrink-0">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveMenuId(isMenuOpen ? null : item.id);
+                  }}
+                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700 hover:text-slate-200 transition-all"
+                  title="Tracker Options"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+
+                {/* Dropdown Popover */}
+                {isMenuOpen && (
+                  <div 
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-0 top-8 z-40 min-w-[130px] rounded-xl border border-slate-800 bg-slate-950 p-1 shadow-2xl backdrop-blur-md"
+                  >
+                    <button
+                      onClick={(e) => {
+                        setActiveMenuId(null);
+                        onTogglePin(item, e);
+                      }}
+                      className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 transition-all text-left"
+                    >
+                      <Pin className={`h-3.5 w-3.5 ${item.pinned ? 'text-amber-400 fill-amber-400' : 'text-slate-400'}`} />
+                      <span>{item.pinned ? 'Unpin' : 'Pin to top'}</span>
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        setActiveMenuId(null);
+                        onEdit(item, e);
+                      }}
+                      className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 transition-all text-left"
+                    >
+                      <Edit3 className="h-3.5 w-3.5 text-slate-400" />
+                      <span>Edit</span>
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        setActiveMenuId(null);
+                        onDelete(item, e);
+                      }}
+                      className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 transition-all text-left"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+</file>
+
+<file path="src/components/DriveFolderBrowser.tsx">
+import React, { useState, useEffect } from 'react';
+import { driveService, DriveFileItem } from '../services/driveService';
+import { Folder, FolderPlus, ChevronRight, Check, Loader2, HardDrive, X } from 'lucide-react';
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelectFolder: (folderId: string, folderName: string) => void;
+  initialFolderId?: string;
+}
+
+export const DriveFolderBrowser: React.FC<Props> = ({
+  isOpen,
+  onClose,
+  onSelectFolder,
+  initialFolderId,
+}) => {
+  const [currentFolder, setCurrentFolder] = useState<DriveFileItem>({
+    id: 'root',
+    name: 'My Drive',
+    mimeType: 'application/vnd.google-apps.folder',
+  });
+  const [breadcrumbs, setBreadcrumbs] = useState<DriveFileItem[]>([]);
+  const [folders, setFolders] = useState<DriveFileItem[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [newFolderName, setNewFolderName] = useState<string>('');
+  const [isCreatingFolder, setIsCreatingFolder] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadFolder(initialFolderId || 'root');
+    }
+  }, [isOpen, initialFolderId]);
+
+  const loadFolder = async (folderId: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      let folderMeta: DriveFileItem = {
+        id: 'root',
+        name: 'My Drive',
+        mimeType: 'application/vnd.google-apps.folder',
+      };
+      if (folderId !== 'root') {
+        folderMeta = await driveService.getFolderMetadata(folderId);
+      }
+
+      setCurrentFolder(folderMeta);
+      const subFolders = await driveService.listFolders(folderId);
+      setFolders(subFolders);
+
+      // Build Breadcrumb path
+      if (folderId === 'root') {
+        setBreadcrumbs([{ id: 'root', name: 'My Drive', mimeType: '' }]);
+      } else {
+        const path: DriveFileItem[] = [folderMeta];
+        let parentId = folderMeta.parents?.[0];
+        while (parentId && parentId !== 'root') {
+          try {
+            const parent = await driveService.getFolderMetadata(parentId);
+            path.unshift(parent);
+            parentId = parent.parents?.[0];
+          } catch {
+            break;
+          }
+        }
+        path.unshift({ id: 'root', name: 'My Drive', mimeType: '' });
+        setBreadcrumbs(path);
+      }
+    } catch (err: any) {
+      console.error('Failed to load drive folders', err);
+      setError(err.message || 'Failed to fetch Drive folders');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    setIsCreatingFolder(true);
+    try {
+      await driveService.findOrCreateFolder(newFolderName.trim(), currentFolder.id);
+      setNewFolderName('');
+      await loadFolder(currentFolder.id);
+    } catch (err: any) {
+      console.error('Folder creation failed', err);
+      setError('Folder creation failed: ' + err.message);
+    } finally {
+      setIsCreatingFolder(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-3 sm:p-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl flex flex-col max-h-[85vh] text-slate-100">
+        
+        {/* Modal Header */}
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20">
+              <HardDrive className="w-4 h-4" />
+            </div>
+            <h3 className="font-bold text-base sm:text-lg">Select Storage Folder</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Breadcrumb Hierarchy */}
+        <div className="px-4 py-3 bg-slate-950/60 border-b border-slate-800/80 flex items-center space-x-1 overflow-x-auto text-xs">
+          {breadcrumbs.map((b, idx) => (
+            <React.Fragment key={b.id}>
+              {idx > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />}
+              <button
+                onClick={() => loadFolder(b.id)}
+                className={`whitespace-nowrap hover:text-sky-400 font-medium transition-colors ${
+                  b.id === currentFolder.id ? 'text-sky-400 font-semibold' : 'text-slate-400'
+                }`}
+              >
+                {b.name}
+              </button>
+            </React.Fragment>
+          ))}
+        </div>
+
+        {/* Sub-Folder List View */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-1 min-h-[220px]">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+              <Loader2 className="w-6 h-6 animate-spin mb-2 text-sky-400" />
+              <span className="text-xs">Fetching Google Drive Folders...</span>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8 px-4 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl">
+              {error}
+            </div>
+          ) : folders.length === 0 ? (
+            <div className="text-center py-12 text-slate-500 text-xs">
+              No subfolders inside "{currentFolder.name}". Create one below or select this folder.
+            </div>
+          ) : (
+            folders.map((f) => (
+              <div
+                key={f.id}
+                onClick={() => loadFolder(f.id)}
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-800/60 border border-transparent hover:border-slate-700/50 cursor-pointer transition-all group"
+              >
+                <div className="flex items-center space-x-3">
+                  <Folder className="w-5 h-5 text-amber-400 fill-amber-400/20 group-hover:scale-110 transition-transform" />
+                  <span className="text-xs sm:text-sm font-medium text-slate-200">{f.name}</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-sky-400 transition-colors" />
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Inline Folder Creation Form */}
+        <div className="p-3 border-t border-slate-800/80 bg-slate-950/40 flex items-center space-x-2">
+          <input
+            type="text"
+            placeholder="New folder name..."
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            className="flex-1 bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+          />
+          <button
+            onClick={handleCreateFolder}
+            disabled={isCreatingFolder || !newFolderName.trim()}
+            className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-xs px-3 py-2 rounded-lg font-medium text-slate-200 transition-all shrink-0"
+          >
+            {isCreatingFolder ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
+            ) : (
+              <FolderPlus className="w-3.5 h-3.5 text-sky-400" />
+            )}
+            <span>Create</span>
+          </button>
+        </div>
+
+        {/* Confirm Selection Footer */}
+        <div className="p-4 border-t border-slate-800 flex items-center justify-between bg-slate-900 rounded-b-2xl">
+          <div className="text-xs text-slate-400">
+            Selected Target: <span className="text-white font-semibold">{currentFolder.name}</span>
+          </div>
+          <button
+            onClick={() => {
+              onSelectFolder(currentFolder.id, currentFolder.name);
+              onClose();
+            }}
+            className="flex items-center space-x-1.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl shadow-lg transition-all active:scale-95"
+          >
+            <Check className="w-4 h-4 text-slate-950 stroke-[3]" />
+            <span>Select This Folder</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="src/components/FilterBar.tsx">
+import React, { useState } from 'react';
+import { FilterOptions, MilestoneCategory, MilestoneType } from '../types';
+import { Search, Filter, SlidersHorizontal, ArrowUpDown, ChevronDown, ChevronUp, Clock, Repeat, Target, Tag, Layers, X } from 'lucide-react';
+
+interface FilterBarProps {
+  filters: FilterOptions;
+  setFilters: React.Dispatch<React.SetStateAction<FilterOptions>>;
+  totalCount: number;
+}
+
+const CATEGORIES: { id: MilestoneCategory | 'all'; label: string }[] = [
+  { id: 'all', label: 'All Categories' },
+  { id: 'career', label: 'Career' },
+  { id: 'celebration', label: 'Celebration' },
+  { id: 'finance', label: 'Finance' },
+  { id: 'habit', label: 'Habit' },
+  { id: 'health', label: 'Health' },
+  { id: 'home', label: 'Home' },
+  { id: 'personal', label: 'Personal' },
+  { id: 'project', label: 'Project' },
+  { id: 'travel', label: 'Travel' },
+];
+
+export const FilterBar: React.FC<FilterBarProps> = ({
+  filters,
+  setFilters,
+  totalCount,
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const hasActiveExtraFilters = filters.category !== 'all' || filters.sortBy !== 'date' || filters.sortOrder !== 'asc';
+
+  const resetAllFilters = () => {
+    setFilters({
+      type: 'all',
+      category: 'all',
+      sortBy: 'date',
+      sortOrder: 'asc',
+      search: '',
+    });
+  };
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-2.5 mb-6 backdrop-blur-sm shadow-sm transition-all">
+      
+      {/* Minimized Main Bar */}
+      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
+        
+        {/* Search Input */}
+        <div className="relative flex-1 min-w-[160px]">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search trackers..."
+            value={filters.search}
+            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+            className="w-full rounded-xl border border-slate-800 bg-slate-950 pl-8 pr-7 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+          />
+          {filters.search && (
+            <button
+              onClick={() => setFilters(f => ({ ...f, search: '' }))}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-200"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+
+        {/* Quick Type Filter Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar shrink-0">
+          <button
+            type="button"
+            onClick={() => setFilters(f => ({ ...f, type: 'all' }))}
+            className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-all ${
+              filters.type === 'all'
+                ? 'bg-emerald-500/15 text-emerald-300 font-semibold border border-emerald-500/30'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Layers className="h-3 w-3 text-emerald-400" />
+            <span>All Active ({totalCount})</span>
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => setFilters(f => ({ ...f, type: 'days_since' }))}
+            className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-all ${
+              filters.type === 'days_since'
+                ? 'bg-emerald-500/15 text-emerald-300 font-semibold border border-emerald-500/30'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Clock className="h-3 w-3 text-emerald-400" />
+            <span className="hidden xs:inline">Days Since</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFilters(f => ({ ...f, type: 'repeating' }))}
+            className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-all ${
+              filters.type === 'repeating'
+                ? 'bg-violet-500/15 text-violet-300 font-semibold border border-violet-500/30'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Repeat className="h-3 w-3 text-violet-400" />
+            <span className="hidden xs:inline">Recurrence</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFilters(f => ({ ...f, type: 'event_countdown' }))}
+            className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-all ${
+              filters.type === 'event_countdown'
+                ? 'bg-blue-500/15 text-blue-300 font-semibold border border-blue-500/30'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Target className="h-3 w-3 text-blue-400" />
+            <span className="hidden xs:inline">Countdown</span>
+          </button>
+        </div>
+
+        {/* Expand / Minimize Filters Button */}
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className={`relative flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-medium transition-all shrink-0 ${
+            isExpanded || hasActiveExtraFilters
+              ? 'border-slate-700 bg-slate-800 text-slate-100'
+              : 'border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
+          <span className="hidden sm:inline">Filters</span>
+          {hasActiveExtraFilters && (
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          )}
+          {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
+
+      </div>
+
+      {/* Expanded Sub-Panel */}
+      {isExpanded && (
+        <div className="mt-2.5 pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs animate-fadeIn">
+          
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Category Select */}
+            <div className="flex items-center gap-1.5">
+              <Tag className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              <span className="text-slate-400 text-[11px]">Category:</span>
+              <select
+                value={filters.category}
+                onChange={e => setFilters(f => ({ ...f, category: e.target.value as any }))}
+                className="rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"
+              >
+                {CATEGORIES.map(cat => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Sort Select */}
+            <div className="flex items-center gap-1.5">
+              <ArrowUpDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              <span className="text-slate-400 text-[11px]">Sort:</span>
+              <select
+                value={filters.sortBy}
+                onChange={e => setFilters(f => ({ ...f, sortBy: e.target.value as any }))}
+                className="rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="date">Date</option>
+                <option value="category">Category</option>
+                <option value="title">Title</option>
+                <option value="days_count">Days / Count</option>
+                <option value="priority">Priority</option>
+              </select>
+            </div>
+
+            {/* Sort Direction Toggle */}
+            <button
+              type="button"
+              onClick={() => setFilters(f => ({ ...f, sortOrder: f.sortOrder === 'asc' ? 'desc' : 'asc' }))}
+              className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:bg-slate-800"
+            >
+              {filters.sortOrder === 'asc' ? 'Ascending ↑' : 'Descending ↓'}
+            </button>
+          </div>
+
+          {/* Reset Filters */}
+          <button
+            type="button"
+            onClick={resetAllFilters}
+            className="text-[11px] text-slate-400 hover:text-rose-400 underline transition-colors ml-auto sm:ml-0"
+          >
+            Reset filters
+          </button>
+
+        </div>
+      )}
+
+    </div>
+  );
+};
+</file>
+
+<file path="src/components/Header.tsx">
+import React from 'react';
+import { 
+  Sparkles
+} from 'lucide-react';
+import { SyncStatus } from '../types';
+
+interface HeaderProps {
+  onOpenSettingsModal: () => void;
+  syncStatus: SyncStatus;
+  userEmail?: string;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  onOpenSettingsModal,
+  syncStatus,
+  userEmail = 'Puvendran@gmail.com',
+}) => {
+  const initials = userEmail
+    ? userEmail.split('@')[0].substring(0, 2).toUpperCase()
+    : 'US';
+
+  return (
+    <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
+      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between gap-3">
+          
+          {/* Brand Logo & Name */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 via-teal-600 to-indigo-600 p-0.5 shadow-md shadow-emerald-500/10 shrink-0">
+              <div className="flex h-full w-full items-center justify-center rounded-[10px] bg-slate-950">
+                <Sparkles className="h-5 w-5 text-emerald-400" />
+              </div>
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-white font-sans leading-tight">
+                smart-track-plan2milestone
+              </h1>
+              <p className="text-[11px] text-slate-400 hidden sm:block">
+                Days Since & Milestone Tracker
+              </p>
+            </div>
+          </div>
+
+          {/* Right Controls: Profile Settings Avatar */}
+          <div className="flex items-center gap-2.5">
+            
+            {/* Profile Picture Avatar (Top Right Corner -> opens Settings & Google Sync) */}
+            <button
+              id="profile-settings-btn"
+              onClick={onOpenSettingsModal}
+              className="group relative flex items-center gap-2 rounded-full p-0.5 border border-slate-700 bg-slate-900 hover:border-emerald-500/50 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              title="Profile Settings & Google Drive Sync"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-emerald-500 via-teal-600 to-indigo-600 p-0.5">
+                <div className="flex h-full w-full items-center justify-center rounded-full bg-slate-950 text-[11px] font-extrabold text-emerald-300 group-hover:text-emerald-200">
+                  {initials}
+                </div>
+              </div>
+
+              {/* Status Indicator Dot */}
+              <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-950 ${
+                syncStatus.isConnected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
+              }`} />
+            </button>
+
+          </div>
+
+        </div>
+      </div>
+    </header>
+  );
+};
+</file>
+
+<file path="src/components/MilestoneCard.tsx">
+import React from 'react';
+import { Milestone } from '../types';
+import { formatDate } from '../utils/dateUtils';
+import { 
+  Clock, 
+  Repeat, 
+  Target, 
+  RotateCcw, 
+  CheckCircle, 
+  Calendar, 
+  Pin, 
+  MoreVertical, 
+  Download, 
+  ExternalLink,
+  ChevronRight,
+  AlertCircle,
+  Tag
+} from 'lucide-react';
+import { GoogleCalendarService } from '../services/googleCalendarService';
+
+interface MilestoneCardProps {
+  milestone: Milestone;
+  onSelect: (milestone: Milestone) => void;
+  onEdit: (milestone: Milestone, e: React.MouseEvent) => void;
+  onResetCounter: (milestone: Milestone, e: React.MouseEvent) => void;
+  onAdvanceCycle: (milestone: Milestone, e: React.MouseEvent) => void;
+  onTogglePin: (milestone: Milestone, e: React.MouseEvent) => void;
+  onDelete: (milestone: Milestone, e: React.MouseEvent) => void;
+  accessToken?: string;
+}
+
+export const MilestoneCard: React.FC<MilestoneCardProps> = ({
+  milestone,
+  onSelect,
+  onEdit,
+  onResetCounter,
+  onAdvanceCycle,
+  onTogglePin,
+  onDelete,
+  accessToken,
+}) => {
+
+  // Calculate days elapsed or days remaining
+  const now = Date.now();
+  const startMs = new Date(milestone.startDate).getTime();
+  const targetMs = milestone.targetDate ? new Date(milestone.targetDate).getTime() : startMs;
+
+  const elapsedDays = Math.floor((now - startMs) / (1000 * 60 * 60 * 24));
+  const remainingDays = Math.ceil((targetMs - now) / (1000 * 60 * 60 * 24));
+
+  // Category Colors
+  const getCategoryColor = (cat: string) => {
+    switch (cat) {
+      case 'health': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+      case 'habit': return 'bg-teal-500/10 text-teal-400 border-teal-500/20';
+      case 'career': return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
+      case 'finance': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+      case 'project': return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20';
+      case 'travel': return 'bg-pink-500/10 text-pink-400 border-pink-500/20';
+      case 'celebration': return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+      case 'home': return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
+      default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+    }
+  };
+
+  const handleExportIcs = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    GoogleCalendarService.downloadIcsFile(milestone);
+  };
+
+  const handleOpenGCalWeb = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const link = GoogleCalendarService.generateGoogleCalendarWebLink(milestone);
+    window.open(link, '_blank');
+  };
+
+  return (
+    <div
+      onClick={() => onSelect(milestone)}
+      className={`group relative flex flex-col justify-between rounded-xl border bg-slate-900/80 p-3.5 shadow-sm transition-all hover:border-slate-700 hover:shadow-lg cursor-pointer ${
+        milestone.pinned 
+          ? 'border-emerald-500/40 ring-1 ring-emerald-500/20' 
+          : 'border-slate-800'
+      }`}
+    >
+      {/* Top Bar: Type, Category, Pin */}
+      <div>
+        <div className="flex items-center justify-between gap-1.5 mb-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            
+            {/* Type badge */}
+            <span className="flex items-center gap-1 rounded-md bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300 border border-slate-700/80">
+              {milestone.type === 'days_since' && <Clock className="h-3 w-3 text-emerald-400" />}
+              {milestone.type === 'repeating' && <Repeat className="h-3 w-3 text-violet-400" />}
+              {milestone.type === 'event_countdown' && <Target className="h-3 w-3 text-blue-400" />}
+              <span>
+                {milestone.type === 'days_since' && 'Days Since'}
+                {milestone.type === 'repeating' && 'Recurrence'}
+                {milestone.type === 'event_countdown' && 'Countdown'}
+              </span>
+            </span>
+
+            {/* Category badge */}
+            <span className={`rounded-md px-2 py-0.5 text-[10px] font-medium border uppercase tracking-wider ${getCategoryColor(milestone.category)}`}>
+              {milestone.category}
+            </span>
+
+          </div>
+
+          {/* Quick Actions */}
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={(e) => onTogglePin(milestone, e)}
+              className={`rounded-md p-1 transition-colors ${
+                milestone.pinned 
+                  ? 'text-emerald-400 bg-emerald-500/10' 
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+              title={milestone.pinned ? 'Unpin milestone' : 'Pin to top'}
+            >
+              <Pin className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={(e) => onEdit(milestone, e)}
+              className="rounded-md p-1 text-slate-500 hover:text-slate-200 transition-colors"
+              title="Edit milestone"
+            >
+              <MoreVertical className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Milestone Title & Description */}
+        <h3 className={`text-sm font-bold text-slate-100 transition-colors leading-tight ${
+          milestone.type === 'days_since' ? 'group-hover:text-emerald-300' :
+          milestone.type === 'repeating' ? 'group-hover:text-violet-300' :
+          'group-hover:text-blue-300'
+        }`}>
+          {milestone.title}
+        </h3>
+        <p className="mt-0.5 text-[11px] text-slate-400 line-clamp-1">
+          {milestone.description || 'No notes provided.'}
+        </p>
+
+        {/* Counter Display Area */}
+        <div className="my-2.5 rounded-lg bg-slate-950/80 p-2.5 border border-slate-800/80">
+          
+          {/* 1. DAYS SINCE COUNTER */}
+          {milestone.type === 'days_since' && (
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-extrabold text-emerald-400 tracking-tight font-mono">
+                    {Math.max(0, elapsedDays)}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-300">Days</span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Since {formatDate(milestone.startDate)}
+                </p>
+              </div>
+
+              {/* Reset button */}
+              <button
+                onClick={(e) => onResetCounter(milestone, e)}
+                className="flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/20 transition-all active:scale-95 shadow-sm"
+                title="Reset counter & save history log"
+              >
+                <RotateCcw className="h-3 w-3" />
+                <span>Reset</span>
+              </button>
+            </div>
+          )}
+
+          {/* 2. REPEATING MILESTONE COUNTER */}
+          {milestone.type === 'repeating' && (
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className={`text-2xl font-extrabold tracking-tight font-mono ${
+                    remainingDays < 0 ? 'text-rose-400' : 'text-violet-400'
+                  }`}>
+                    {remainingDays < 0 ? `${Math.abs(remainingDays)}d Overdue` : `${remainingDays} Days`}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  <span className="capitalize text-slate-300">{milestone.repeatInterval}</span> • Cycle #{ (milestone.completedCycles || 0) + 1 }
+                </p>
+              </div>
+
+              {/* Complete cycle button */}
+              <button
+                onClick={(e) => onAdvanceCycle(milestone, e)}
+                className="flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-[11px] font-semibold text-violet-300 hover:bg-violet-500/20 transition-all active:scale-95 shadow-sm"
+                title="Complete current cycle and advance to next"
+              >
+                <CheckCircle className="h-3 w-3 text-violet-400" />
+                <span>Advance</span>
+              </button>
+            </div>
+          )}
+
+          {/* 3. EVENT COUNTDOWN COUNTER */}
+          {milestone.type === 'event_countdown' && (
+            <div>
+              <div className="flex items-baseline justify-between">
+                <div className="flex items-baseline gap-1.5">
+                  <span className={`text-2xl font-extrabold tracking-tight font-mono ${
+                    remainingDays <= 0 ? 'text-emerald-400' : 'text-blue-400'
+                  }`}>
+                    {remainingDays <= 0 ? 'Reached!' : remainingDays}
+                  </span>
+                  {remainingDays > 0 && <span className="text-xs font-semibold text-slate-300">Days Left</span>}
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                Target: {formatDate(targetMs.toString())}
+              </p>
+            </div>
+          )}
+
+        </div>
+      </div>
+
+      {/* Footer: Calendar Sync & Details CTA */}
+      <div className="flex items-center justify-between border-t border-slate-800/80 pt-2 text-[11px] text-slate-400">
+        
+        {/* Calendar Buttons */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleOpenGCalWeb}
+            className="flex items-center gap-1 rounded bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+            title="Add to Google Calendar"
+          >
+            <Calendar className="h-3 w-3 text-blue-400" />
+            <span>GCal</span>
+          </button>
+
+          <button
+            onClick={handleExportIcs}
+            className="flex items-center gap-1 rounded bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+            title="Export .ics for Apple Calendar"
+          >
+            <Download className="h-3 w-3 text-emerald-400" />
+            <span>.ics</span>
+          </button>
+        </div>
+
+        {/* View Details Link */}
+        <span className={`flex items-center gap-0.5 text-[10px] font-semibold group-hover:translate-x-0.5 transition-all ${
+          milestone.type === 'days_since' ? 'text-emerald-400' :
+          milestone.type === 'repeating' ? 'text-violet-400' :
+          'text-blue-400'
+        }`}>
+          <span>Details</span>
+          <ChevronRight className="h-3 w-3" />
+        </span>
+
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="src/components/MilestoneDetailModal.tsx">
+import React, { useState, useEffect } from 'react';
+import { Milestone } from '../types';
+import { formatDate } from '../utils/dateUtils';
+import { 
+  X, 
+  Clock, 
+  Repeat, 
+  Target, 
+  Trash2, 
+  History, 
+  RotateCcw,
+  Edit3
+} from 'lucide-react';
+
+interface MilestoneDetailModalProps {
+  isOpen: boolean;
+  milestone: Milestone | null;
+  onClose: () => void;
+  onEdit: (milestone: Milestone) => void;
+  onDelete: (milestoneId: string) => void;
+  onOpenResetModal: (milestone: Milestone) => void;
+  onOpenAdvanceModal?: (milestone: Milestone) => void;
+}
+
+export const MilestoneDetailModal: React.FC<MilestoneDetailModalProps> = ({
+  isOpen,
+  milestone,
+  onClose,
+  onEdit,
+  onDelete,
+  onOpenResetModal,
+  onOpenAdvanceModal,
+}) => {
+  const [daysCount, setDaysCount] = useState(0);
+
+  useEffect(() => {
+    if (!milestone) return;
+
+    const updateDays = () => {
+      const now = Date.now();
+      const startMs = new Date(milestone.startDate).getTime();
+      const targetMs = milestone.targetDate ? new Date(milestone.targetDate).getTime() : startMs;
+
+      let diff = 0;
+      if (milestone.type === 'days_since') {
+        diff = Math.max(0, now - startMs);
+        setDaysCount(Math.floor(diff / (1000 * 60 * 60 * 24)));
+      } else {
+        diff = targetMs - now;
+        setDaysCount(Math.ceil(diff / (1000 * 60 * 60 * 24)));
+      }
+    };
+
+    updateDays();
+    const interval = setInterval(updateDays, 60000);
+    return () => clearInterval(interval);
+  }, [milestone]);
+
+  if (!isOpen || !milestone) return null;
+
+  const displayDays = Math.max(0, daysCount);
+  const weeks = Math.floor(displayDays / 7);
+  const remainingDaysInWeek = displayDays % 7;
+  const years = (displayDays / 365.25).toFixed(1);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+      <div className="relative w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl my-8 transition-all duration-200">
+        
+        {/* Top Header */}
+        <div className="flex items-start justify-between border-b border-slate-800/80 pb-3.5 mb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="rounded-md bg-slate-800/70 border border-slate-700/60 px-2 py-0.5 text-[11px] font-medium text-slate-300 capitalize">
+                {milestone.category}
+              </span>
+              <span className="text-slate-600 text-xs">•</span>
+              <span className="text-xs text-slate-400 font-normal">
+                {milestone.type === 'days_since' && 'days since'}
+                {milestone.type === 'repeating' && 'recurrence'}
+                {milestone.type === 'event_countdown' && 'countdown'}
+              </span>
+            </div>
+            <h2 className="text-base sm:text-lg font-medium text-slate-100 tracking-normal leading-snug">
+              {milestone.title}
+            </h2>
+          </div>
+
+          <button
+            onClick={onClose}
+            aria-label="Close modal"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors shrink-0"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Day-Based Counter Display */}
+        <div className="my-4 rounded-xl bg-slate-950/60 p-4 border border-slate-800/80 text-center shadow-inner">
+          <p className={`text-[11px] font-medium uppercase tracking-wider mb-2 ${
+            milestone.type === 'days_since' ? 'text-emerald-400/90' :
+            milestone.type === 'repeating' ? 'text-violet-400/90' :
+            'text-blue-400/90'
+          }`}>
+            {milestone.type === 'days_since' && 'Elapsed time since start'}
+            {milestone.type === 'repeating' && 'Time remaining to next milestone'}
+            {milestone.type === 'event_countdown' && 'Countdown to target event'}
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 my-2.5">
+            {/* Primary Days Card */}
+            <div className="rounded-xl bg-slate-900 px-5 py-2.5 border border-slate-800 shadow-sm flex flex-col items-center min-w-[130px]">
+              <div className={`text-3xl font-bold font-mono tracking-tight ${
+                milestone.type === 'days_since' ? 'text-emerald-400' :
+                milestone.type === 'repeating' ? 'text-violet-400' :
+                'text-blue-400'
+              }`}>{displayDays}</div>
+              <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">Overall Days</div>
+            </div>
+
+            {/* Equivalent Breakdown Cards (Weeks / Years) */}
+            <div className="grid grid-cols-2 gap-2 w-full sm:w-auto font-mono">
+              <div className="rounded-xl bg-slate-900 px-3.5 py-2 border border-slate-800 text-center">
+                <div className="text-base font-semibold text-slate-200">{weeks}w {remainingDaysInWeek}d</div>
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider">Weeks</div>
+              </div>
+              <div className="rounded-xl bg-slate-900 px-3.5 py-2 border border-slate-800 text-center">
+                <div className="text-base font-semibold text-slate-200">{years} yrs</div>
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider">Years</div>
+              </div>
+            </div>
+          </div>
+
+          {milestone.type === 'days_since' && (
+            <button
+              onClick={() => onOpenResetModal(milestone)}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/20 transition-all"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Reset counter & save streak</span>
+            </button>
+          )}
+
+          {milestone.type === 'repeating' && onOpenAdvanceModal && (
+            <button
+              onClick={() => onOpenAdvanceModal(milestone)}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-violet-500/25 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-300 hover:bg-violet-500/20 transition-all"
+            >
+              <Repeat className="h-3.5 w-3.5" />
+              <span>Complete cycle & advance next target</span>
+            </button>
+          )}
+        </div>
+
+        {/* Description & Notes */}
+        {milestone.description && (
+          <div className="mb-4">
+            <h4 className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1">Description</h4>
+            <p className="text-xs text-slate-300 bg-slate-950/60 p-3 rounded-xl border border-slate-800/60 leading-relaxed">
+              {milestone.description}
+            </p>
+          </div>
+        )}
+
+        {/* Activity & History Log */}
+        {milestone.resetHistory && milestone.resetHistory.length > 0 && (
+          <div className="mb-4">
+            <h4 className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">
+              <History className="h-3.5 w-3.5 text-violet-400" />
+              <span>Activity & History log</span>
+            </h4>
+            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+              {milestone.resetHistory.map((log) => (
+                <div key={log.id} className="rounded-lg border border-slate-800/80 bg-slate-950/60 p-2 text-xs">
+                  <div className="flex items-center justify-between text-slate-400">
+                    <span>{formatDate(log.date)}</span>
+                    <span className="font-semibold text-slate-300 font-mono">
+                      {milestone.type === 'repeating' 
+                        ? `Cycle Completed`
+                        : `${log.durationDays} days streak`}
+                    </span>
+                  </div>
+                  {log.note && <p className="text-slate-300 text-[11px] italic mt-0.5">"{log.note}"</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Footer Actions */}
+        <div className="flex items-center justify-between border-t border-slate-800/80 pt-4 mt-5">
+          <button
+            onClick={() => {
+              if (confirm('Are you sure you want to delete this milestone?')) {
+                onDelete(milestone.id);
+                onClose();
+              }
+            }}
+            className="flex items-center gap-1.5 rounded-xl border border-rose-500/20 bg-rose-500/5 px-3.5 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500/15 hover:border-rose-500/30 transition-all"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete</span>
+          </button>
+
+          <button
+            onClick={() => onEdit(milestone)}
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 transition-all shadow-sm"
+          >
+            <Edit3 className="h-3.5 w-3.5" />
+            <span>Edit</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="src/components/MilestoneFormModal.tsx">
+import React, { useState, useEffect } from 'react';
+import { 
+  Milestone, 
+  MilestoneType, 
+  MilestoneCategory, 
+  RepeatInterval, 
+  ChecklistTask 
+} from '../types';
+import { 
+  X, 
+  Clock, 
+  Repeat, 
+  Target, 
+  Calendar, 
+  Plus, 
+  Trash2, 
+  Sparkles,
+  Tag,
+  AlertCircle
+} from 'lucide-react';
+
+interface MilestoneFormModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (milestone: Milestone) => void;
+  initialData?: Milestone | null;
+}
+
+const CATEGORIES: { id: MilestoneCategory; label: string }[] = [
+  { id: 'career', label: 'Career' },
+  { id: 'celebration', label: 'Celebration' },
+  { id: 'finance', label: 'Finance' },
+  { id: 'habit', label: 'Habit' },
+  { id: 'health', label: 'Health' },
+  { id: 'home', label: 'Home' },
+  { id: 'personal', label: 'Personal' },
+  { id: 'project', label: 'Project' },
+  { id: 'travel', label: 'Travel' },
+];
+
+export const MilestoneFormModal: React.FC<MilestoneFormModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  initialData,
+}) => {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [type, setType] = useState<MilestoneType>('days_since');
+  const [category, setCategory] = useState<MilestoneCategory>('health');
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [targetDate, setTargetDate] = useState(
+    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  );
+  const [repeatInterval, setRepeatInterval] = useState<RepeatInterval>('monthly');
+  const [customRepeatDays, setCustomRepeatDays] = useState<number>(30);
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [syncToGoogleCalendar, setSyncToGoogleCalendar] = useState(true);
+  const [checklist, setChecklist] = useState<ChecklistTask[]>([]);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+
+  useEffect(() => {
+    if (initialData) {
+      setTitle(initialData.title);
+      setDescription(initialData.description || '');
+      setType(initialData.type);
+      setCategory(initialData.category);
+      setStartDate(initialData.startDate.split('T')[0]);
+      setTargetDate(
+        initialData.targetDate 
+          ? initialData.targetDate.split('T')[0] 
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      );
+      setRepeatInterval(initialData.repeatInterval || 'monthly');
+      setCustomRepeatDays(initialData.customRepeatDays || 30);
+      setPriority(initialData.priority);
+      setSyncToGoogleCalendar(initialData.syncToGoogleCalendar);
+      setChecklist(initialData.checklist || []);
+    } else {
+      // Defaults for new
+      setTitle('');
+      setDescription('');
+      setType('days_since');
+      setCategory('health');
+      setStartDate(new Date().toISOString().split('T')[0]);
+      setTargetDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+      setRepeatInterval('monthly');
+      setCustomRepeatDays(30);
+      setPriority('medium');
+      setSyncToGoogleCalendar(true);
+      setChecklist([]);
+    }
+  }, [initialData, isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+
+    const newOrUpdatedMilestone: Milestone = {
+      id: initialData ? initialData.id : 'ms-' + Date.now(),
+      title: title.trim(),
+      description: description.trim(),
+      type,
+      category,
+      startDate: new Date(startDate).toISOString(),
+      targetDate: type === 'days_since' ? undefined : new Date(targetDate).toISOString(),
+      repeatInterval: type === 'repeating' ? repeatInterval : undefined,
+      customRepeatDays: type === 'repeating' && repeatInterval === 'custom' ? customRepeatDays : undefined,
+      completedCycles: initialData ? initialData.completedCycles : 0,
+      resetHistory: initialData ? initialData.resetHistory : [],
+      checklist,
+      color: initialData ? initialData.color : '#10b981',
+      priority,
+      pinned: initialData ? initialData.pinned : false,
+      archived: initialData ? initialData.archived : false,
+      syncToGoogleCalendar,
+      googleCalendarEventId: initialData?.googleCalendarEventId,
+      createdAt: initialData ? initialData.createdAt : new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    onSave(newOrUpdatedMilestone);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+      <div className="relative w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl my-8 transition-all duration-200">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3.5 mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-medium text-slate-100 leading-snug">
+                {initialData ? 'Edit milestone' : 'New milestone tracker'}
+              </h2>
+              <p className="text-xs text-slate-400 font-normal">
+                Configure tracking mode, category & target date
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close modal"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors shrink-0"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          
+          {/* Milestone Type Selector */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
+              1. Choose Tracking Mode
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              
+              <button
+                type="button"
+                onClick={() => setType('days_since')}
+                className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all ${
+                  type === 'days_since'
+                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/30'
+                    : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <Clock className="h-5 w-5 text-emerald-400" />
+                <span className="text-xs font-bold">Days Since</span>
+                <span className="text-[10px] text-slate-400 line-clamp-1">Elapsed streak</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setType('repeating')}
+                className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all ${
+                  type === 'repeating'
+                    ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-500/30'
+                    : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <Repeat className="h-5 w-5 text-indigo-400" />
+                <span className="text-xs font-bold">Recurrence</span>
+                <span className="text-[10px] text-slate-400 line-clamp-1">Recurring reminder</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setType('event_countdown')}
+                className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all ${
+                  type === 'event_countdown'
+                    ? 'border-cyan-500 bg-cyan-500/10 text-cyan-300 ring-1 ring-cyan-500/30'
+                    : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <Target className="h-5 w-5 text-cyan-400" />
+                <span className="text-xs font-bold">Countdown</span>
+                <span className="text-[10px] text-slate-400 line-clamp-1">Future event</span>
+              </button>
+
+            </div>
+          </div>
+
+          {/* Title & Description */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Title <span className="text-emerald-400">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g., Days Since Quitting Caffeine / Quarterly Oil Change / Product Launch"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Description / Notes
+            </label>
+            <textarea
+              rows={2}
+              placeholder="Add key objectives, motivation, or instructions..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Category & Priority Row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Category
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as MilestoneCategory)}
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"
+              >
+                {CATEGORIES.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Priority
+              </label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as any)}
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="low">Low Priority</option>
+                <option value="medium">Medium Priority</option>
+                <option value="high">High Priority</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Dates & Scheduling Section */}
+          <div className="rounded-xl border border-slate-800 bg-slate-950 p-3.5 space-y-3">
+            
+            {type === 'days_since' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Start Date (Date when timer started)
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+            )}
+
+            {type === 'repeating' && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Next Target Date
+                    </label>
+                    <input
+                      type="date"
+                      value={targetDate}
+                      onChange={(e) => setTargetDate(e.target.value)}
+                      className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Repeat Interval
+                    </label>
+                    <select
+                      value={repeatInterval}
+                      onChange={(e) => setRepeatInterval(e.target.value as RepeatInterval)}
+                      className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly (90 Days)</option>
+                      <option value="yearly">Yearly</option>
+                      <option value="custom">Custom Days</option>
+                    </select>
+                  </div>
+                </div>
+
+                {repeatInterval === 'custom' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Repeat Every X Days
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={customRepeatDays}
+                      onChange={(e) => setCustomRepeatDays(parseInt(e.target.value) || 1)}
+                      className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {type === 'event_countdown' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Target Event Date
+                </label>
+                <input
+                  type="date"
+                  value={targetDate}
+                  onChange={(e) => setTargetDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+            )}
+
+          </div>
+
+          {/* Action Footer */}
+          <div className="flex items-center justify-end gap-2 border-t border-slate-800/80 pt-4 mt-5">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="rounded-xl bg-emerald-500 px-5 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 transition-all shadow-sm"
+            >
+              {initialData ? 'Save changes' : 'Create tracker'}
+            </button>
+          </div>
+
+        </form>
+
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="src/components/ResetModal.tsx">
+import React, { useState } from 'react';
+import { Milestone } from '../types';
+import { RotateCcw, X, History, Sparkles } from 'lucide-react';
+
+interface ResetModalProps {
+  isOpen: boolean;
+  milestone: Milestone | null;
+  onClose: () => void;
+  onConfirmReset: (milestoneId: string, note: string) => void;
+}
+
+export const ResetModal: React.FC<ResetModalProps> = ({
+  isOpen,
+  milestone,
+  onClose,
+  onConfirmReset,
+}) => {
+  const [note, setNote] = useState('');
+
+  if (!isOpen || !milestone) return null;
+
+  const elapsedDays = Math.floor(
+    (Date.now() - new Date(milestone.startDate).getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onConfirmReset(milestone.id, note.trim());
+    setNote('');
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div className="relative w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+        
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <RotateCcw className="h-4 w-4" />
+            </div>
+            <h3 className="text-base font-bold text-slate-100">
+              Reset "Days Since" Counter
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 mb-4 text-center">
+          <p className="text-xs text-slate-400">Current Active Streak Duration</p>
+          <div className="my-1 flex items-baseline justify-center gap-2">
+            <span className="text-4xl font-extrabold text-amber-400 font-mono">{elapsedDays}</span>
+            <span className="text-sm font-semibold text-slate-300">Days</span>
+          </div>
+          <p className="text-[11px] text-slate-400 truncate">
+            {milestone.title}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Log Reflection / Reason for Reset (Optional)
+            </label>
+            <textarea
+              rows={3}
+              placeholder="e.g., Vacation slip-up, system restart, or fresh baseline start..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-100 placeholder-slate-500 focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+
+          <p className="text-[11px] text-slate-400 bg-amber-500/5 border border-amber-500/15 rounded-lg p-2.5">
+            💡 Resetting will start your counter at Day 0 from today, and save this {elapsedDays}-day streak into your permanent Reset History log.
+          </p>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-1.5 text-xs font-bold text-slate-950 shadow-md shadow-amber-500/20 hover:brightness-110"
+            >
+              Confirm Reset
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="src/components/SettingsModal.tsx">
+import React, { useState } from 'react';
+import { SyncStatus, SmartTrackAppData } from '../types';
+import { 
+  X, 
+  HardDrive, 
+  Cloud, 
+  Folder, 
+  Upload, 
+  Download, 
+  Trash2, 
+  HelpCircle, 
+  RotateCw, 
+  CloudUpload, 
+  CloudDownload, 
+  Check, 
+  LogOut,
+  Sliders
+} from 'lucide-react';
+import { DRIVE_FOLDER_NAME, APP_SUBFOLDER_NAME, FILE_NAME } from '../services/googleDriveService';
+
+interface SettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  syncStatus: SyncStatus;
+  onConnectDrive: () => void;
+  onPushToDrive: () => void;
+  onPullFromDrive: () => void;
+  appData: SmartTrackAppData;
+  onImportLocalJson: (data: SmartTrackAppData) => void;
+  onResetDefaultData: () => void;
+  onOpenFolderBrowser?: () => void;
+  syncFolderName?: string;
+  userEmail?: string;
+}
+
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+  isOpen,
+  onClose,
+  syncStatus,
+  onConnectDrive,
+  onPushToDrive,
+  onPullFromDrive,
+  appData,
+  onImportLocalJson,
+  onResetDefaultData,
+  onOpenFolderBrowser,
+  syncFolderName = 'smart-track-plan2milestone',
+  userEmail = 'puvendran@gmail.com',
+}) => {
+  const [activeTab, setActiveTab] = useState<'app' | 'sync'>('sync');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [isEditingPath, setIsEditingPath] = useState(false);
+  const [customFolder, setCustomFolder] = useState(APP_SUBFOLDER_NAME);
+
+  if (!isOpen) return null;
+
+  const handleExportLocalJson = () => {
+    const content = JSON.stringify(appData, null, 2);
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `smarttrack_plan2milestone_backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (parsed && Array.isArray(parsed.milestones)) {
+          onImportLocalJson(parsed);
+          setImportError(null);
+          alert('Local JSON backup restored successfully!');
+        } else {
+          setImportError('Invalid JSON structure. Missing milestones array.');
+        }
+      } catch (err: any) {
+        setImportError('Failed to parse JSON file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const initials = userEmail
+    ? userEmail.split('@')[0].substring(0, 2).toUpperCase()
+    : 'PU';
+
+  const userName = userEmail.includes('puvendran') 
+    ? 'Puvendran Paramanantham' 
+    : userEmail.split('@')[0];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+      <div className="relative w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl my-6 flex flex-col max-h-[90vh]">
+        
+        {/* Top Header */}
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-800/80 shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h2 className="text-lg font-bold text-slate-100">Settings</h2>
+          </div>
+        </div>
+
+        {/* Navigation Tabs (App Settings vs Google Sync) */}
+        <div className="flex border-b border-slate-800/80 px-4 shrink-0 bg-slate-950/60">
+          <button
+            onClick={() => setActiveTab('app')}
+            className={`py-3 px-6 text-xs sm:text-sm font-semibold transition-all relative ${
+              activeTab === 'app'
+                ? 'text-cyan-400 border-b-2 border-cyan-400'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            App Settings
+          </button>
+          <button
+            onClick={() => setActiveTab('sync')}
+            className={`py-3 px-6 text-xs sm:text-sm font-semibold transition-all relative ${
+              activeTab === 'sync'
+                ? 'text-cyan-400 border-b-2 border-cyan-400'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Google Sync
+          </button>
+        </div>
+
+        {/* Tab Content Body */}
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
+          {activeTab === 'sync' ? (
+            <>
+              {/* Card 1: Google Account Login */}
+              <div className="rounded-xl border border-slate-800/90 bg-slate-900/60 p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="relative shrink-0">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 border-2 border-slate-700 overflow-hidden text-emerald-400 font-bold text-sm">
+                        {initials}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="text-sm font-bold text-slate-100">Google Account Login</h3>
+                        <HelpCircle className="h-3.5 w-3.5 text-slate-500" />
+                      </div>
+                      <p className="text-xs font-semibold text-cyan-400 mt-0.5">
+                        {syncStatus.isConnected ? `Connected as: ${userName}` : 'Not Connected'}
+                      </p>
+                      <p className="text-xs text-slate-400">{userEmail}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={onConnectDrive}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-950 border border-slate-800/90 py-2.5 px-4 text-xs font-bold text-slate-200 hover:bg-slate-800/80 transition-all active:scale-[0.99]"
+                >
+                  <LogOut className="h-4 w-4 text-cyan-400" />
+                  <span>{syncStatus.isConnected ? 'Disconnect / Re-authorize' : 'Connect Google Account'}</span>
+                </button>
+              </div>
+
+              {/* Card 2: Cloud Synchronization */}
+              <div className="rounded-xl border border-slate-800/90 bg-slate-900/60 p-4 shadow-sm">
+                <div className="flex items-center gap-2.5 mb-1.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                    <Cloud className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-sm font-bold text-slate-100">Cloud Synchronization</h3>
+                    <HelpCircle className="h-3.5 w-3.5 text-slate-500" />
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400 mb-2">
+                  Synchronize local milestones, events, and trackers with your Google Drive.
+                </p>
+
+                <p className="text-[11px] text-slate-400 font-medium mb-3">
+                  Last synced: {syncStatus.lastSyncedAt ? new Date(syncStatus.lastSyncedAt).toLocaleString() : '12/08/2026, 20:44:19'}
+                </p>
+
+                <div className="space-y-2">
+                  <button
+                    onClick={onPushToDrive}
+                    disabled={syncStatus.isSyncing}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 py-3 px-4 text-xs font-bold text-white shadow-md shadow-cyan-500/10 transition-all active:scale-[0.99] disabled:opacity-50"
+                  >
+                    <RotateCw className={`h-4 w-4 ${syncStatus.isSyncing ? 'animate-spin' : ''}`} />
+                    <span>{syncStatus.isSyncing ? 'Syncing...' : 'Sync Now (Push to Drive)'}</span>
+                  </button>
+
+                  {syncStatus.isConnected && (
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={onPushToDrive}
+                        disabled={syncStatus.isSyncing}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 py-2 px-3 text-xs font-semibold text-emerald-400 hover:bg-slate-800"
+                      >
+                        <CloudUpload className="h-3.5 w-3.5" />
+                        <span>Push Data</span>
+                      </button>
+                      <button
+                        onClick={onPullFromDrive}
+                        disabled={syncStatus.isSyncing}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 py-2 px-3 text-xs font-semibold text-indigo-400 hover:bg-slate-800"
+                      >
+                        <CloudDownload className="h-3.5 w-3.5" />
+                        <span>Pull Data</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Card 3: Google Drive Storage Path */}
+              <div className="rounded-xl border border-slate-800/90 bg-slate-900/60 p-4 shadow-sm">
+                <div className="flex items-center gap-2.5 mb-1.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                    <Folder className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-sm font-bold text-slate-100">Google Drive Storage Path</h3>
+                    <HelpCircle className="h-3.5 w-3.5 text-slate-500" />
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400 mb-3">
+                  Define where your app data is saved in your Google Drive. Choose a destination folder or create a custom app folder location.
+                </p>
+
+                <div className="space-y-2.5 mb-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Storage Location
+                    </label>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-mono text-cyan-300">
+                      <Folder className="h-4 w-4 text-cyan-400 shrink-0" />
+                      <span>{DRIVE_FOLDER_NAME}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Active Sync Folder / Destination
+                    </label>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-200">
+                      <Folder className="h-4 w-4 text-amber-400 shrink-0" />
+                      <span>{syncFolderName || 'Plan2Milestone'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (onOpenFolderBrowser) {
+                      onOpenFolderBrowser();
+                    } else {
+                      setIsEditingPath(!isEditingPath);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-950 border border-slate-800/90 py-2.5 px-4 text-xs font-bold text-cyan-400 hover:bg-slate-800/80 transition-all active:scale-[0.99]"
+                >
+                  <Folder className="h-4 w-4 text-cyan-400" />
+                  <span>Browse / Change Drive Location</span>
+                </button>
+              </div>
+
+              {/* Card 4: Local JSON Database Import */}
+              <div className="rounded-xl border border-slate-800/90 bg-slate-900/60 p-4 shadow-sm">
+                <div className="flex items-center gap-2.5 mb-1.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                    <Upload className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-sm font-bold text-slate-100">Local JSON Database Import</h3>
+                    <HelpCircle className="h-3.5 w-3.5 text-slate-500" />
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400 mb-3">
+                  Directly restore/import database JSON files (e.g., milestones, events) from your device. This integrates files into local storage so you can easily sync them up to Google Drive, bypassing cloud restrictions!
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-slate-800 bg-slate-950 hover:border-cyan-500/50 cursor-pointer group transition-all">
+                    <Upload className="h-6 w-6 text-cyan-400 mb-2 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-slate-200">Select JSON Files</span>
+                    <span className="text-[10px] text-slate-500 mt-0.5">Choose specific .json files</span>
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <button
+                    onClick={handleExportLocalJson}
+                    className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-slate-800 bg-slate-950 hover:border-emerald-500/50 group transition-all"
+                  >
+                    <Download className="h-6 w-6 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-slate-200">Export Backup JSON</span>
+                    <span className="text-[10px] text-slate-500 mt-0.5">Download local database file</span>
+                  </button>
+                </div>
+
+                {importError && (
+                  <p className="text-xs text-rose-400 mt-2">{importError}</p>
+                )}
+              </div>
+
+              {/* Card 5: Purge Data */}
+              <div className="rounded-xl border border-slate-800/90 bg-slate-900/60 p-4 shadow-sm">
+                <div className="flex items-center gap-2.5 mb-1.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                    <Trash2 className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-sm font-bold text-rose-400">Purge Data</h3>
+                    <HelpCircle className="h-3.5 w-3.5 text-slate-500" />
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400 mb-3">
+                  Purge all local tracker data or restore standard default sample milestones. Your local device's data can be re-synced to Google Drive at any time.
+                </p>
+
+                <button
+                  onClick={() => {
+                    if (confirm('Reset to standard sample milestones data?')) {
+                      onResetDefaultData();
+                      onClose();
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/20 py-2.5 px-4 text-xs font-bold text-rose-300 hover:bg-rose-500/20 transition-all"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>Purge & Reset Local Sample Data</span>
+                </button>
+              </div>
+            </>
+          ) : (
+            /* App Settings Tab */
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+                <div className="flex items-center gap-2.5 mb-2">
+                  <Sliders className="h-4.5 w-4.5 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-slate-100">Application Preferences</h3>
+                </div>
+                <p className="text-xs text-slate-400 mb-4">
+                  Manage display preferences, dataset themes, and regional date formats.
+                </p>
+
+                <div className="space-y-3 text-xs">
+                  <div className="flex items-center justify-between py-2 border-b border-slate-800">
+                    <span className="font-medium text-slate-300">Theme Atmosphere</span>
+                    <span className="text-slate-400 font-semibold">Dark Obsidian</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-slate-800">
+                    <span className="font-medium text-slate-300">Default Date Format</span>
+                    <span className="text-slate-400 font-semibold">DD-MMM-YYYY</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="font-medium text-slate-300">Auto-save Local Storage</span>
+                    <span className="text-emerald-400 font-bold flex items-center gap-1">
+                      <Check className="h-3.5 w-3.5" />
+                      <span>Active</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="src/components/StatsOverview.tsx">
+import React from 'react';
+import { Milestone } from '../types';
+import { 
+  CalendarClock, 
+  AlertCircle, 
+  ChevronRight
+} from 'lucide-react';
+
+interface StatsOverviewProps {
+  milestones: Milestone[];
+  onFilterClick?: (filterType: 'all' | 'upcoming' | 'days_since' | 'repeating' | 'event_countdown') => void;
+}
+
+export const StatsOverview: React.FC<StatsOverviewProps> = ({
+  milestones,
+  onFilterClick,
+}) => {
+  const activeMilestones = milestones.filter(m => !m.archived);
+
+  // Overdue milestones count
+  const overdueCount = activeMilestones.filter(m => {
+    if (!m.targetDate) return false;
+    const diff = new Date(m.targetDate).getTime() - Date.now();
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return days < 0;
+  }).length;
+
+  // Upcoming in next 14 days
+  const upcomingCount = activeMilestones.filter(m => {
+    if (!m.targetDate) return false;
+    const diff = new Date(m.targetDate).getTime() - Date.now();
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return days >= 0 && days <= 14;
+  }).length;
+
+  return (
+    <div 
+      onClick={() => onFilterClick && onFilterClick('upcoming')}
+      className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5 backdrop-blur-sm shadow-sm hover:border-slate-700 cursor-pointer transition-all group"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            <CalendarClock className="h-5 w-5" />
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-blue-400">
+                Due in Next 14 Days
+              </span>
+
+              {overdueCount > 0 && (
+                <span className="flex items-center gap-1 rounded-full bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 text-[10px] font-semibold text-rose-300">
+                  <AlertCircle className="h-3 w-3 text-rose-400" />
+                  <span>{overdueCount} Overdue</span>
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-baseline gap-2">
+              <span className="text-xl font-extrabold text-slate-100">{upcomingCount}</span>
+              <span className="text-xs text-slate-400">
+                {upcomingCount === 1 ? 'Milestone approaching deadline' : 'Milestones approaching deadline'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 text-xs text-slate-500 group-hover:text-blue-400 transition-colors font-medium shrink-0">
+          <span className="hidden xs:inline">Click to view</span>
+          <ChevronRight className="h-4 w-4" />
+        </div>
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="src/components/TimelineView.tsx">
+import React from 'react';
+import { Milestone } from '../types';
+import { formatDate } from '../utils/dateUtils';
+import { Clock, Repeat, Target, Calendar, CheckCircle2 } from 'lucide-react';
+
+interface TimelineViewProps {
+  milestones: Milestone[];
+  onSelectMilestone: (milestone: Milestone) => void;
+}
+
+export const TimelineView: React.FC<TimelineViewProps> = ({
+  milestones,
+  onSelectMilestone,
+}) => {
+  // Sort all milestones by effective date (targetDate or startDate)
+  const sortedMilestones = [...milestones].sort((a, b) => {
+    const dateA = new Date(a.targetDate || a.startDate).getTime();
+    const dateB = new Date(b.targetDate || b.startDate).getTime();
+    return dateA - dateB;
+  });
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 backdrop-blur-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-base font-bold text-slate-100">Chronological Timeline</h2>
+          <p className="text-xs text-slate-400">Baseline dates and future target milestones</p>
+        </div>
+      </div>
+
+      <div className="relative pl-5 border-l-2 border-slate-800 space-y-3 my-2">
+        {sortedMilestones.map((ms) => {
+          const effectiveDate = new Date(ms.targetDate || ms.startDate);
+          const isPast = effectiveDate.getTime() < Date.now();
+
+          return (
+            <div
+              key={ms.id}
+              onClick={() => onSelectMilestone(ms)}
+              className="relative group cursor-pointer"
+            >
+              {/* Node dot on line */}
+              <div
+                className={`absolute -left-[27px] top-2 h-3.5 w-3.5 rounded-full border-2 bg-slate-950 transition-transform group-hover:scale-125 ${
+                  ms.type === 'days_since'
+                    ? 'border-emerald-500 bg-emerald-500/20'
+                    : ms.type === 'repeating'
+                    ? 'border-violet-500 bg-violet-500/20'
+                    : 'border-blue-500 bg-blue-500/20'
+                }`}
+              />
+
+              <div className="rounded-xl border border-slate-800/80 bg-slate-950/80 p-2.5 px-3.5 transition-all group-hover:border-slate-700 group-hover:bg-slate-900/90">
+                <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono font-bold text-slate-300">
+                      {formatDate(ms.targetDate || ms.startDate)}
+                    </span>
+                    <span className="rounded-md bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300 uppercase tracking-wider">
+                      {ms.category}
+                    </span>
+                  </div>
+
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                    isPast ? 'bg-slate-800 text-slate-400' : 'bg-emerald-500/10 text-emerald-400'
+                  }`}>
+                    {isPast ? 'Past Baseline' : 'Upcoming Target'}
+                  </span>
+                </div>
+
+                <h3 className={`text-sm font-bold text-slate-100 transition-colors ${
+                  ms.type === 'days_since' ? 'group-hover:text-emerald-300' :
+                  ms.type === 'repeating' ? 'group-hover:text-violet-300' :
+                  'group-hover:text-blue-300'
+                }`}>
+                  {ms.title}
+                </h3>
+                {ms.description && (
+                  <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{ms.description}</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="src/data/initialData.ts">
+import { Milestone } from '../types';
+
+export const INITIAL_MILESTONES: Milestone[] = [
+  {
+    id: 'ms-1',
+    title: 'Days Since Quitting Caffeine',
+    description: 'Tracking clean days without coffee or energy drinks for better sleep and focus.',
+    type: 'days_since',
+    category: 'health',
+    startDate: new Date(Date.now() - 42 * 24 * 60 * 60 * 1000).toISOString(), // 42 days ago
+    color: '#10b981', // emerald
+    icon: 'coffee',
+    priority: 'high',
+    pinned: true,
+    archived: false,
+    syncToGoogleCalendar: false,
+    resetHistory: [
+      {
+        id: 'rh-1',
+        date: new Date(Date.now() - 42 * 24 * 60 * 60 * 1000).toISOString(),
+        note: 'Fresh start after vacation reset',
+        durationDays: 14
+      }
+    ],
+    checklist: [
+      { id: 'cl-1', title: 'Replace morning espresso with green tea', completed: true },
+      { id: 'cl-2', title: 'Drink 3L of water daily', completed: true },
+      { id: 'cl-3', title: 'Reach 30-day streak milestone', completed: true }
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'ms-2',
+    title: 'Quarterly Vehicle Maintenance',
+    description: 'Check oil level, tire pressure, air filters, and fluid levels every 90 days.',
+    type: 'repeating',
+    category: 'personal',
+    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    targetDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(), // 60 days remaining
+    repeatInterval: 'quarterly',
+    completedCycles: 3,
+    color: '#6366f1', // indigo
+    icon: 'car',
+    priority: 'medium',
+    pinned: true,
+    archived: false,
+    syncToGoogleCalendar: true,
+    resetHistory: [],
+    checklist: [
+      { id: 'cl-201', title: 'Check engine oil level', completed: false },
+      { id: 'cl-202', title: 'Inspect tire tread & PSI', completed: false },
+      { id: 'cl-203', title: 'Replace cabin air filter', completed: false }
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'ms-3',
+    title: 'SmartTrack - Plan2Milestone Launch',
+    description: 'Major software release with Google Calendar & Google Drive sync capabilities.',
+    type: 'event_countdown',
+    category: 'project',
+    startDate: new Date().toISOString(),
+    targetDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days from now
+    color: '#06b6d4', // cyan
+    icon: 'rocket',
+    priority: 'high',
+    pinned: true,
+    archived: false,
+    syncToGoogleCalendar: true,
+    resetHistory: [],
+    checklist: [
+      { id: 'cl-301', title: 'Implement Days Since counter logic', completed: true },
+      { id: 'cl-302', title: 'Integrate Google Drive .AppData folder sync', completed: true },
+      { id: 'cl-303', title: 'Add Apple Calendar .ics export', completed: true },
+      { id: 'cl-304', title: 'Final UI polish & responsive design testing', completed: false }
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'ms-4',
+    title: 'Days Since Last Medical Checkup',
+    description: 'General annual health review and comprehensive blood test.',
+    type: 'days_since',
+    category: 'health',
+    startDate: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString(), // 180 days ago
+    color: '#f59e0b', // amber
+    icon: 'heart-pulse',
+    priority: 'medium',
+    pinned: false,
+    archived: false,
+    syncToGoogleCalendar: false,
+    resetHistory: [],
+    checklist: [
+      { id: 'cl-401', title: 'Schedule next appointment in 6 months', completed: true }
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'ms-5',
+    title: 'Monthly Savings & Investment Milestone',
+    description: 'Transfer fixed allocation into high-yield savings and portfolio every 30 days.',
+    type: 'repeating',
+    category: 'finance',
+    startDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+    targetDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+    repeatInterval: 'monthly',
+    completedCycles: 8,
+    color: '#10b981', // emerald
+    icon: 'wallet',
+    priority: 'high',
+    pinned: false,
+    archived: false,
+    syncToGoogleCalendar: true,
+    resetHistory: [],
+    checklist: [
+      { id: 'cl-501', title: 'Review budget statement', completed: true },
+      { id: 'cl-502', title: 'Execute automatic investment transfer', completed: false }
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'ms-6',
+    title: 'Japan Autumn Discovery Trip',
+    description: '10-day trip across Kyoto, Tokyo, and Hakone during foliage peak season.',
+    type: 'event_countdown',
+    category: 'travel',
+    startDate: new Date().toISOString(),
+    targetDate: new Date(Date.now() + 85 * 24 * 60 * 60 * 1000).toISOString(),
+    color: '#ec4899', // pink/rose
+    icon: 'plane',
+    priority: 'medium',
+    pinned: false,
+    archived: false,
+    syncToGoogleCalendar: true,
+    resetHistory: [],
+    checklist: [
+      { id: 'cl-601', title: 'Book flight tickets and JR Pass', completed: true },
+      { id: 'cl-602', title: 'Reserve ryokan in Hakone', completed: true },
+      { id: 'cl-603', title: 'Pack luggage & travel insurance', completed: false }
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+</file>
 
 <file path="src/services/authService.ts">
 /**
@@ -62,9 +2691,11 @@ This section contains the contents of the repository's files.
  */
 
 const rawClientId = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_ID = (rawClientId && rawClientId !== 'YOUR_PLAN2MILESTONE_CLIENT_ID') 
-  ? rawClientId 
-  : '809054363294-dev.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = rawClientId || '';
+
+if (!GOOGLE_CLIENT_ID) {
+  console.error('VITE_GOOGLE_CLIENT_ID is missing. Please set your OAuth Client ID for project 614372660797 in .env');
+}
 const TOKEN_KEY = 'google_access_token';
 const EXPIRY_KEY = 'google_token_expiry';
 
@@ -1076,6 +3707,857 @@ class SyncService {
 export const syncService = new SyncService();
 </file>
 
+<file path="src/utils/dateUtils.ts">
+export function formatDate(dateString?: string | null): string {
+  if (!dateString) return 'No date';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return 'Invalid date';
+
+  const day = String(d.getDate()).padStart(2, '0');
+  const monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  const month = monthNames[d.getMonth()];
+  const year = String(d.getFullYear()).slice(-2);
+
+  return `${day}-${month}-${year}`;
+}
+</file>
+
+<file path="src/App.tsx">
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Milestone, 
+  SyncStatus, 
+  FilterOptions, 
+  SmartTrackAppData 
+} from './types';
+import { StorageService } from './services/storageService';
+import { GoogleDriveService, DRIVE_FOLDER_NAME, APP_SUBFOLDER_NAME } from './services/googleDriveService';
+import { driveService } from './services/driveService';
+import { syncService } from './services/syncService';
+import { googleSignIn, getStoredAccessToken, clearStoredAccessToken } from './services/authService';
+import { GoogleCalendarService } from './services/googleCalendarService';
+import { DriveFolderBrowser } from './components/DriveFolderBrowser';
+import { Header } from './components/Header';
+import { StatsOverview } from './components/StatsOverview';
+import { FilterBar } from './components/FilterBar';
+import { CondensedListView } from './components/CondensedListView';
+import { MilestoneCard } from './components/MilestoneCard';
+import { TimelineView } from './components/TimelineView';
+import { MilestoneFormModal } from './components/MilestoneFormModal';
+import { MilestoneDetailModal } from './components/MilestoneDetailModal';
+import { ResetModal } from './components/ResetModal';
+import { AdvanceCycleModal } from './components/AdvanceCycleModal';
+import { SettingsModal } from './components/SettingsModal';
+import { Plus, Sparkles, List, LayoutGrid, Clock } from 'lucide-react';
+
+export default function App() {
+  // 1. Core State & Storage Token
+  const [appData, setAppData] = useState<SmartTrackAppData>(() => StorageService.loadLocalData());
+  const [viewMode, setViewMode] = useState<'list' | 'cards' | 'timeline'>('list');
+  const [token, setToken] = useState<string | null>(() => getStoredAccessToken());
+  const [syncFolderId, setSyncFolderId] = useState<string>(() => localStorage.getItem('custom_sync_folder_id') || '');
+  const [syncFolderName, setSyncFolderName] = useState<string>(() => localStorage.getItem('custom_sync_folder_name') || 'smart-track-plan2milestone');
+  const [isBrowserOpen, setIsBrowserOpen] = useState(false);
+  
+  // 2. Sync Status
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    isConnected: !!token,
+    accessToken: token || undefined,
+    isSyncing: false,
+    driveFolderPath: `${DRIVE_FOLDER_NAME}/${syncFolderName}`,
+    googleCalendarConnected: !!token,
+  });
+
+  // 3. Filters State
+  const [filters, setFilters] = useState<FilterOptions>({
+    search: '',
+    type: 'all',
+    category: 'all',
+    status: 'active',
+    sortBy: 'date',
+    sortOrder: 'desc',
+  });
+
+  // 4. Modals State
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
+
+  const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
+
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resettingMilestone, setResettingMilestone] = useState<Milestone | null>(null);
+
+  const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
+  const [advancingMilestone, setAdvancingMilestone] = useState<Milestone | null>(null);
+
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+  // Auto-save local data on change
+  useEffect(() => {
+    StorageService.saveLocalData(appData);
+  }, [appData]);
+
+  // Keep driveService token in sync
+  useEffect(() => {
+    driveService.setToken(token);
+    if (token) {
+      setSyncStatus(prev => ({
+        ...prev,
+        isConnected: true,
+        accessToken: token,
+        googleCalendarConnected: true,
+      }));
+    }
+  }, [token]);
+
+  // Execute 2-way differential sync
+  const runSync = async () => {
+    if (!driveService.hasToken()) return;
+    try {
+      setSyncStatus(prev => ({ ...prev, isSyncing: true }));
+      const result = await syncService.syncAppData(appData, syncFolderId || undefined);
+      setAppData(result.appData);
+      setSyncStatus(prev => ({
+        ...prev,
+        isConnected: true,
+        isSyncing: false,
+        driveFileId: result.fileId,
+        lastSyncedAt: result.syncedAt,
+      }));
+      return result;
+    } catch (err: any) {
+      console.error('Drive 2-way sync error:', err);
+      setSyncStatus(prev => ({ ...prev, isSyncing: false, syncError: err.message }));
+    }
+  };
+
+  // Google Login Handler
+  const handleConnectDrive = async () => {
+    const res = await googleSignIn();
+    if (res?.accessToken) {
+      setToken(res.accessToken);
+      driveService.setToken(res.accessToken);
+      setSyncStatus(prev => ({
+        ...prev,
+        isConnected: true,
+        accessToken: res.accessToken,
+        googleCalendarConnected: true,
+      }));
+      await runSync();
+      alert('Google Drive connected! Sync complete.');
+    } else {
+      alert('Could not authenticate with Google. Please try again.');
+    }
+  };
+
+  // Push to Drive
+  const handlePushToDrive = async () => {
+    if (!driveService.hasToken()) {
+      await handleConnectDrive();
+      return;
+    }
+    await runSync();
+    alert('Successfully pushed and synchronized milestones with Google Drive!');
+  };
+
+  // Pull from Drive
+  const handlePullFromDrive = async () => {
+    if (!driveService.hasToken()) {
+      await handleConnectDrive();
+      return;
+    }
+    try {
+      setSyncStatus(prev => ({ ...prev, isSyncing: true }));
+      const pulled = await syncService.pullFromDrive(syncFolderId || undefined);
+      if (pulled && pulled.appData && Array.isArray(pulled.appData.milestones)) {
+        setAppData(pulled.appData);
+        setSyncStatus(prev => ({
+          ...prev,
+          isSyncing: false,
+          lastSyncedAt: pulled.syncedAt,
+        }));
+        alert('Successfully pulled data from Google Drive!');
+      } else {
+        alert('No data file found in the selected Drive location yet.');
+        setSyncStatus(prev => ({ ...prev, isSyncing: false }));
+      }
+    } catch (err: any) {
+      alert('Drive pull failed: ' + err.message);
+      setSyncStatus(prev => ({ ...prev, isSyncing: false }));
+    }
+  };
+
+  // CRUD Operations
+  const handleSaveMilestone = (milestone: Milestone) => {
+    const existingIndex = appData.milestones.findIndex(m => m.id === milestone.id);
+    let updatedList: Milestone[];
+
+    if (existingIndex >= 0) {
+      updatedList = [...appData.milestones];
+      updatedList[existingIndex] = milestone;
+    } else {
+      updatedList = [milestone, ...appData.milestones];
+    }
+
+    setAppData(prev => ({
+      ...prev,
+      milestones: updatedList,
+      lastUpdated: new Date().toISOString(),
+    }));
+
+    // Auto-sync event to Google Calendar API if enabled & token exists
+    if (milestone.syncToGoogleCalendar && syncStatus.accessToken) {
+      GoogleCalendarService.createOrUpdateCalendarEvent(syncStatus.accessToken, milestone)
+        .then(eventId => {
+          // Store event ID
+          setAppData(prev => ({
+            ...prev,
+            milestones: prev.milestones.map(m => m.id === milestone.id ? { ...m, googleCalendarEventId: eventId } : m),
+          }));
+        })
+        .catch(err => console.warn('GCal auto sync error:', err));
+    }
+  };
+
+  const handleDeleteMilestone = (id: string) => {
+    setAppData(prev => ({
+      ...prev,
+      milestones: prev.milestones.filter(m => m.id !== id),
+      lastUpdated: new Date().toISOString(),
+    }));
+  };
+
+  const handleTogglePin = (milestone: Milestone, e: React.MouseEvent) => {
+    e.stopPropagation();
+    handleSaveMilestone({ ...milestone, pinned: !milestone.pinned });
+  };
+
+  // Reset Counter for "Days Since"
+  const handleOpenResetModal = (milestone: Milestone, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setResettingMilestone(milestone);
+    setIsResetModalOpen(true);
+  };
+
+  const handleConfirmReset = (milestoneId: string, note: string) => {
+    const target = appData.milestones.find(m => m.id === milestoneId);
+    if (!target) return;
+
+    const elapsedDays = Math.floor(
+      (Date.now() - new Date(target.startDate).getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    const newHistoryItem = {
+      id: 'rh-' + Date.now(),
+      date: new Date().toISOString(),
+      note,
+      durationDays: elapsedDays,
+    };
+
+    const updated: Milestone = {
+      ...target,
+      startDate: new Date().toISOString(),
+      resetHistory: [newHistoryItem, ...(target.resetHistory || [])],
+      updatedAt: new Date().toISOString(),
+    };
+
+    handleSaveMilestone(updated);
+
+    // Keep detail modal updated if open
+    if (selectedMilestone?.id === milestoneId) {
+      setSelectedMilestone(updated);
+    }
+  };
+
+  // Advance Cycle for "Repeating"
+  const handleOpenAdvanceModal = (milestone: Milestone, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setAdvancingMilestone(milestone);
+    setIsAdvanceModalOpen(true);
+  };
+
+  const handleConfirmAdvance = (milestoneId: string, note: string) => {
+    const target = appData.milestones.find(m => m.id === milestoneId);
+    if (!target) return;
+
+    const currentTarget = new Date(target.targetDate || target.startDate);
+    
+    // Calculate next target date
+    let nextTarget = new Date(currentTarget);
+    switch (target.repeatInterval) {
+      case 'daily':
+        nextTarget.setDate(nextTarget.getDate() + 1);
+        break;
+      case 'weekly':
+        nextTarget.setDate(nextTarget.getDate() + 7);
+        break;
+      case 'monthly':
+        nextTarget.setMonth(nextTarget.getMonth() + 1);
+        break;
+      case 'quarterly':
+        nextTarget.setMonth(nextTarget.getMonth() + 3);
+        break;
+      case 'yearly':
+        nextTarget.setFullYear(nextTarget.getFullYear() + 1);
+        break;
+      case 'custom':
+        nextTarget.setDate(nextTarget.getDate() + (target.customRepeatDays || 30));
+        break;
+      default:
+        nextTarget.setMonth(nextTarget.getMonth() + 1);
+    }
+
+    const completedCycleNum = (target.completedCycles || 0) + 1;
+
+    const newHistoryItem = {
+      id: 'ch-' + Date.now(),
+      date: new Date().toISOString(),
+      note: note ? note : `Completed Cycle #${completedCycleNum}`,
+      durationDays: 0,
+    };
+
+    const updated: Milestone = {
+      ...target,
+      targetDate: nextTarget.toISOString(),
+      completedCycles: completedCycleNum,
+      resetHistory: [newHistoryItem, ...(target.resetHistory || [])],
+      updatedAt: new Date().toISOString(),
+    };
+
+    handleSaveMilestone(updated);
+
+    // Keep detail modal updated if open
+    if (selectedMilestone?.id === milestoneId) {
+      setSelectedMilestone(updated);
+    }
+  };
+
+  // Checklist Actions
+  const handleToggleTask = (milestoneId: string, taskId: string) => {
+    setAppData(prev => ({
+      ...prev,
+      milestones: prev.milestones.map(m => {
+        if (m.id !== milestoneId) return m;
+        return {
+          ...m,
+          checklist: m.checklist.map(c => c.id === taskId ? { ...c, completed: !c.completed } : c),
+        };
+      }),
+    }));
+
+    if (selectedMilestone?.id === milestoneId) {
+      setSelectedMilestone(prev => prev ? {
+        ...prev,
+        checklist: prev.checklist.map(c => c.id === taskId ? { ...c, completed: !c.completed } : c),
+      } : null);
+    }
+  };
+
+  const handleAddTask = (milestoneId: string, title: string) => {
+    const newTask = { id: 'cl-' + Date.now(), title, completed: false };
+    setAppData(prev => ({
+      ...prev,
+      milestones: prev.milestones.map(m => {
+        if (m.id !== milestoneId) return m;
+        return {
+          ...m,
+          checklist: [...m.checklist, newTask],
+        };
+      }),
+    }));
+
+    if (selectedMilestone?.id === milestoneId) {
+      setSelectedMilestone(prev => prev ? {
+        ...prev,
+        checklist: [...prev.checklist, newTask],
+      } : null);
+    }
+  };
+
+  const handleResetDefaultData = () => {
+    if (confirm('Reset to default sample milestones? This will overwrite your current list.')) {
+      const defaultData = StorageService.resetToDefault();
+      setAppData(defaultData);
+    }
+  };
+
+  // Filtered & Sorted Milestones
+  const filteredMilestones = useMemo(() => {
+    return appData.milestones.filter(m => {
+      // Type Filter
+      if (filters.type === 'upcoming') {
+        if (!m.targetDate) return false;
+        const diff = new Date(m.targetDate).getTime() - Date.now();
+        const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+        if (days < 0 || days > 14) return false;
+      } else if (filters.type !== 'all' && m.type !== filters.type) {
+        return false;
+      }
+      // Category Filter
+      if (filters.category !== 'all' && m.category !== filters.category) return false;
+      // Search Filter
+      if (filters.search) {
+        const query = filters.search.toLowerCase();
+        const matchTitle = m.title.toLowerCase().includes(query);
+        const matchDesc = m.description?.toLowerCase().includes(query);
+        const matchCat = m.category.toLowerCase().includes(query);
+        if (!matchTitle && !matchDesc && !matchCat) return false;
+      }
+      return true;
+    }).sort((a, b) => {
+      // Pinned items always on top
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+
+      if (filters.sortBy === 'category') {
+        return filters.sortOrder === 'asc'
+          ? a.category.localeCompare(b.category)
+          : b.category.localeCompare(a.category);
+      }
+
+      if (filters.sortBy === 'title') {
+        return filters.sortOrder === 'asc' 
+          ? a.title.localeCompare(b.title) 
+          : b.title.localeCompare(a.title);
+      }
+
+      if (filters.sortBy === 'priority') {
+        const pWeight = { high: 3, medium: 2, low: 1 };
+        const pA = pWeight[a.priority] || 0;
+        const pB = pWeight[b.priority] || 0;
+        return filters.sortOrder === 'asc' ? pA - pB : pB - pA;
+      }
+
+      if (filters.sortBy === 'days_count') {
+        const getCount = (m: Milestone) => {
+          if (m.type === 'days_since') {
+            return Math.floor((Date.now() - new Date(m.startDate).getTime()) / (1000 * 60 * 60 * 24));
+          }
+          const t = m.targetDate ? new Date(m.targetDate).getTime() : new Date(m.startDate).getTime();
+          return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
+        };
+        const cA = getCount(a);
+        const cB = getCount(b);
+        return filters.sortOrder === 'asc' ? cA - cB : cB - cA;
+      }
+      
+      const dateA = new Date(a.targetDate || a.startDate).getTime();
+      const dateB = new Date(b.targetDate || b.startDate).getTime();
+
+      return filters.sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+    });
+  }, [appData.milestones, filters]);
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+      
+      {/* Header Bar */}
+      <Header
+        onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+        syncStatus={syncStatus}
+      />
+
+      {/* Main Content Container */}
+      <main className="flex-1 mx-auto w-full max-w-7xl px-4 py-5 pb-8 sm:px-6 lg:px-8">
+        
+        {/* View Type Switcher (above Due In frame) & New Tracker Button */}
+        <div className="flex w-full items-center justify-between gap-2 mb-4">
+          
+          {/* View Mode Switcher Box */}
+          <div className="flex h-9 items-center rounded-xl bg-slate-900/90 p-1 border border-slate-800 shadow-sm shrink-0">
+            <button
+              id="view-list-btn"
+              onClick={() => setViewMode('list')}
+              className={`flex h-full items-center gap-1 rounded-lg px-2 sm:px-3 text-xs font-medium transition-all ${
+                viewMode === 'list'
+                  ? 'bg-slate-800 text-emerald-400 font-semibold shadow-sm border border-slate-700/80'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="List View"
+            >
+              <List className="h-3.5 w-3.5" />
+              <span className="hidden xs:inline">List</span>
+            </button>
+
+            <button
+              id="view-cards-btn"
+              onClick={() => setViewMode('cards')}
+              className={`flex h-full items-center gap-1 rounded-lg px-2 sm:px-3 text-xs font-medium transition-all ${
+                viewMode === 'cards'
+                  ? 'bg-slate-800 text-emerald-400 font-semibold shadow-sm border border-slate-700/80'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Cards View"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              <span className="hidden xs:inline">Cards</span>
+            </button>
+
+            <button
+              id="view-timeline-btn"
+              onClick={() => setViewMode('timeline')}
+              className={`flex h-full items-center gap-1 rounded-lg px-2 sm:px-3 text-xs font-medium transition-all ${
+                viewMode === 'timeline'
+                  ? 'bg-slate-800 text-emerald-400 font-semibold shadow-sm border border-slate-700/80'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Timeline View"
+            >
+              <Clock className="h-3.5 w-3.5" />
+              <span className="hidden xs:inline">Timeline</span>
+            </button>
+          </div>
+
+          {/* Add New Action Button - ml-auto & shrink-0 ensures flush right alignment on mobile */}
+          <button
+            onClick={() => {
+              setEditingMilestone(null);
+              setIsFormModalOpen(true);
+            }}
+            className="flex h-9 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 sm:px-4 text-xs font-bold text-slate-950 hover:bg-emerald-400 transition-all shadow-sm active:scale-95 shrink-0 ml-auto"
+          >
+            <Plus className="h-4 w-4 stroke-[3]" />
+            <span>Add New</span>
+          </button>
+
+        </div>
+
+        {/* Minimized / Expandable Filter Bar (Right below View Switcher) */}
+        <FilterBar
+          filters={filters}
+          setFilters={setFilters}
+          totalCount={appData.milestones.length}
+        />
+
+        {/* High-level Metrics Overview ("Due in" frame) */}
+        <StatsOverview
+          milestones={appData.milestones}
+          onFilterClick={(type) => setFilters(f => ({ ...f, type: type as any, search: '' }))}
+        />
+
+        {/* View Switcher Output */}
+        {viewMode === 'list' && (
+          <CondensedListView
+            milestones={filteredMilestones}
+            onSelect={(m) => setSelectedMilestone(m)}
+            onEdit={(m, e) => {
+              e.stopPropagation();
+              setEditingMilestone(m);
+              setIsFormModalOpen(true);
+            }}
+            onResetCounter={(m, e) => handleOpenResetModal(m, e)}
+            onAdvanceCycle={(m, e) => handleOpenAdvanceModal(m, e)}
+            onTogglePin={handleTogglePin}
+            onDelete={(m, e) => {
+              e.stopPropagation();
+              if (confirm(`Delete "${m.title}"?`)) {
+                handleDeleteMilestone(m.id);
+              }
+            }}
+          />
+        )}
+
+        {viewMode === 'cards' && (
+          <div>
+            {filteredMilestones.length > 0 ? (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredMilestones.map((ms) => (
+                  <MilestoneCard
+                    key={ms.id}
+                    milestone={ms}
+                    onSelect={(m) => setSelectedMilestone(m)}
+                    onEdit={(m, e) => {
+                      e.stopPropagation();
+                      setEditingMilestone(m);
+                      setIsFormModalOpen(true);
+                    }}
+                    onResetCounter={(m, e) => handleOpenResetModal(m, e)}
+                    onAdvanceCycle={(m, e) => handleOpenAdvanceModal(m, e)}
+                    onTogglePin={handleTogglePin}
+                    onDelete={(m, e) => {
+                      e.stopPropagation();
+                      if (confirm(`Delete "${m.title}"?`)) {
+                        handleDeleteMilestone(m.id);
+                      }
+                    }}
+                    accessToken={syncStatus.accessToken}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center">
+                <Sparkles className="mx-auto h-10 w-10 text-slate-600 mb-3" />
+                <h3 className="text-base font-bold text-slate-300">No Trackers Found</h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  No trackers match your current filters. Try resetting the search or add a new tracker.
+                </p>
+                <button
+                  onClick={() => {
+                    setEditingMilestone(null);
+                    setIsFormModalOpen(true);
+                  }}
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-slate-950 shadow-md shadow-emerald-500/20 hover:brightness-110"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Create Tracker</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {viewMode === 'timeline' && (
+          <TimelineView
+            milestones={filteredMilestones}
+            onSelectMilestone={(m) => setSelectedMilestone(m)}
+          />
+        )}
+
+      </main>
+
+      {/* Modals */}
+      <MilestoneFormModal
+        isOpen={isFormModalOpen}
+        onClose={() => setIsFormModalOpen(false)}
+        onSave={handleSaveMilestone}
+        initialData={editingMilestone}
+      />
+
+      <MilestoneDetailModal
+        isOpen={!!selectedMilestone}
+        milestone={selectedMilestone}
+        onClose={() => setSelectedMilestone(null)}
+        onEdit={(m) => {
+          setSelectedMilestone(null);
+          setEditingMilestone(m);
+          setIsFormModalOpen(true);
+        }}
+        onDelete={handleDeleteMilestone}
+        onOpenResetModal={(m) => handleOpenResetModal(m)}
+        onOpenAdvanceModal={(m) => handleOpenAdvanceModal(m)}
+      />
+
+      <ResetModal
+        isOpen={isResetModalOpen}
+        milestone={resettingMilestone}
+        onClose={() => setIsResetModalOpen(false)}
+        onConfirmReset={handleConfirmReset}
+      />
+
+      <AdvanceCycleModal
+        isOpen={isAdvanceModalOpen}
+        milestone={advancingMilestone}
+        onClose={() => setIsAdvanceModalOpen(false)}
+        onConfirmAdvance={handleConfirmAdvance}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        syncStatus={syncStatus}
+        onConnectDrive={handleConnectDrive}
+        onPushToDrive={handlePushToDrive}
+        onPullFromDrive={handlePullFromDrive}
+        appData={appData}
+        onImportLocalJson={(data) => setAppData(data)}
+        onResetDefaultData={handleResetDefaultData}
+        onOpenFolderBrowser={() => setIsBrowserOpen(true)}
+        syncFolderName={syncFolderName}
+      />
+
+      <DriveFolderBrowser
+        isOpen={isBrowserOpen}
+        onClose={() => setIsBrowserOpen(false)}
+        initialFolderId={syncFolderId || 'root'}
+        onSelectFolder={(folderId, folderName) => {
+          setSyncFolderId(folderId);
+          setSyncFolderName(folderName);
+          localStorage.setItem('custom_sync_folder_id', folderId);
+          localStorage.setItem('custom_sync_folder_name', folderName);
+          runSync();
+        }}
+      />
+
+      {/* Simple Footer */}
+      <footer className="mt-12 border-t border-slate-800/80 bg-slate-950/60 py-4 text-center">
+        <div className="mx-auto max-w-7xl px-4 text-xs text-slate-500 font-medium">
+          Plan2Milestone Ecosystem
+        </div>
+      </footer>
+
+
+
+    </div>
+  );
+}
+</file>
+
+<file path="src/index.css">
+@import "tailwindcss";
+
+@layer base {
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+    scroll-behavior: smooth;
+  }
+}
+
+/* Seamless Modern Dark Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #020617;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+</file>
+
+<file path="src/main.tsx">
+import {StrictMode} from 'react';
+import {createRoot} from 'react-dom/client';
+import App from './App.tsx';
+import './index.css';
+
+// Register PWA Service Worker
+if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // SW registration fallback
+    });
+  });
+}
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);
+</file>
+
+<file path="src/types.ts">
+export type MilestoneType = 'days_since' | 'repeating' | 'event_countdown';
+
+export type MilestoneCategory = 
+  | 'health' 
+  | 'habit' 
+  | 'career' 
+  | 'personal' 
+  | 'finance' 
+  | 'project' 
+  | 'travel' 
+  | 'celebration'
+  | 'home';
+
+export type RepeatInterval = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'custom';
+
+export interface ResetHistoryItem {
+  id: string;
+  date: string; // ISO string
+  note?: string;
+  durationDays: number;
+}
+
+export interface ChecklistTask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
+export interface Milestone {
+  id: string;
+  title: string;
+  description: string;
+  type: MilestoneType;
+  category: MilestoneCategory;
+  startDate: string; // ISO date string (when days_since started, or event start date)
+  targetDate?: string; // ISO date string for event_countdown or repeating target
+  repeatInterval?: RepeatInterval;
+  customRepeatDays?: number;
+  completedCycles?: number;
+  resetHistory: ResetHistoryItem[];
+  checklist: ChecklistTask[];
+  color: string; // Hex or tailwind color identifier
+  icon?: string;
+  priority: 'low' | 'medium' | 'high';
+  pinned: boolean;
+  archived: boolean;
+  syncToGoogleCalendar: boolean;
+  googleCalendarEventId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SyncStatus {
+  isConnected: boolean;
+  accessToken?: string;
+  userEmail?: string;
+  userName?: string;
+  userPicture?: string;
+  lastSyncedAt?: string;
+  isSyncing: boolean;
+  syncError?: string;
+  driveFolderPath: string;
+  driveFolderId?: string;
+  driveFileId?: string;
+  googleCalendarConnected: boolean;
+}
+
+export interface FilterOptions {
+  search: string;
+  type: 'all' | 'upcoming' | MilestoneType;
+  category: 'all' | MilestoneCategory;
+  status: 'active' | 'archived' | 'pinned' | 'all';
+  sortBy: 'date' | 'category' | 'days_count' | 'title' | 'priority';
+  sortOrder: 'asc' | 'desc';
+}
+
+export interface SmartTrackAppData {
+  version: string;
+  lastUpdated: string;
+  appName: string;
+  milestones: Milestone[];
+  userPreferences?: {
+    theme: 'dark' | 'light';
+    defaultView: 'cards' | 'timeline' | 'calendar';
+  };
+}
+</file>
+
+<file path="src/vite-env.d.ts">
+/// <reference types="vite/client" />
+
+interface ImportMetaEnv {
+  readonly VITE_GOOGLE_CLIENT_ID?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+</file>
+
 <file path=".env.example">
 # GEMINI_API_KEY: Required for Gemini AI API calls.
 # AI Studio automatically injects this at runtime from user secrets.
@@ -1091,18 +4573,231 @@ APP_URL="MY_APP_URL"
 VITE_GOOGLE_CLIENT_ID=
 </file>
 
+<file path=".gitignore">
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+</file>
+
 <file path="firebase-applet-config.json">
 {
-  "projectId": "smarttrack-day2day",
-  "appId": "1:973865168672:web:d1a432b0dcf9d96a573145",
-  "apiKey": "AIzaSyABevT369_WQWFmLskyrN--RcDNyRbDqzA",
-  "authDomain": "smarttrack-day2day.firebaseapp.com",
-  "storageBucket": "smarttrack-day2day.firebasestorage.app",
-  "messagingSenderId": "973865168672",
+  "projectId": "smart-track-plan2milestone",
+  "appId": "",
+  "apiKey": "",
+  "authDomain": "",
+  "storageBucket": "",
+  "messagingSenderId": "614372660797",
   "measurementId": "",
-  "oAuthClientId": "973865168672-t00pf77pi7u1lpuhm4o6j2ipo2khth83.apps.googleusercontent.com",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#020617" />
+    <meta name="description" content="Days Since & Milestone Tracker with Google Drive & Calendar Sync" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="smart-track-plan2milestone" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>smart-track-plan2milestone</title>
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body class="bg-slate-950 text-slate-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+</file>
+
+<file path="manifest.json">
+{
+  "short_name": "Plan2Milestone",
+  "name": "SmartTrack - Plan2Milestone",
+  "icons": [
+    {
+      "src": "pwa-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "pwa-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "display": "standalone",
+  "orientation": "portrait",
+  "description": "Simple days since tracker and milestone planner ecosystem with Google Drive and Calendar sync."
+}
+</file>
+
+<file path="metadata.json">
+{
+  "name": "smart-track-plan2milestone",
+  "description": "Days since tracker, repeating milestone reminders, and event scheduling synchronized with Google Calendar, Apple Calendar, and Google Drive.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "smart-track-plan2milestone",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist server.js",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^2.4.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react": "^5.0.4",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "vite": "^6.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.0",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.3",
+    "@types/express": "^4.17.21"
+  }
+}
+</file>
+
+<file path="sw.js">
+const CACHE_NAME = 'p2m-v1';
+const ASSETS_TO_CACHE = [
+  '/',
+  '/index.html',
+  '/manifest.json'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS_TO_CACHE);
+    })
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cache) => {
+          if (cache !== CACHE_NAME) {
+            return caches.delete(cache);
+          }
+        })
+      );
+    })
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        // Return cached and fetch in background for cache update
+        fetch(event.request).then((response) => {
+          if (response.status === 200) {
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response));
+          }
+        }).catch(() => {});
+        return cachedResponse;
+      }
+      return fetch(event.request).catch(() => {
+        return caches.match('/');
+      });
+    })
+  );
+});
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  }
+}
+</file>
+
+<file path="vite.config.ts">
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+import {defineConfig} from 'vite';
+
+export default defineConfig(() => {
+  return {
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      },
+    },
+    server: {
+      // HMR is disabled in AI Studio via DISABLE_HMR env var.
+      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      hmr: process.env.DISABLE_HMR !== 'true',
+      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
+      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    },
+  };
+});
 </file>
 
 </files>
